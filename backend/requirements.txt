@@ -8,3 +8,7 @@ pyjwt
 pydantic-settings
 psycopg2-binary
 email-validator
+boto3
+langchain
+langgraph
+langchain-aws

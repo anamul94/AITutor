@@ -21,6 +21,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 from app.models.user import Base
+import app.models.course  # Import the new models so Alembic metadata picks them up 
 from app.core.config import settings
 
 # add your model's MetaData object here
