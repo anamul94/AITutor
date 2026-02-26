@@ -38,3 +38,7 @@ frontend:
 migrate:
 	@echo "Running Database Migrations..."
 	cd backend && ./venv/bin/alembic upgrade head
+
+makemigration:
+	@echo "Creating migration..."
+	cd backend && ./venv/bin/alembic revision --autogenerate -m "$(msg)"

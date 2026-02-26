@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.course import Course, Module, Lesson, UserProgress
-from app.schemas.course import CourseGenerateRequest, CourseResponse, LessonContentResponse
+from app.schemas.course import CourseGenerateRequest, CourseResponse, LessonContentResponse, UserProgressResponse, UserProgressRequest
 from app.core.llm import generate_course_syllabus, generate_lesson_content
 
 router = APIRouter()
@@ -119,11 +119,12 @@ async def get_or_generate_lesson_content(
     Fetch a lesson's content. If it hasn't been generated yet, use the LLM to write the content
     and create a quiz, then save it and return it. JIT (Just-In-Time) Generation.
     """
-    # Load Lesson along with Module and Course for context
+    # Load Lesson along with Module and Course for context, and eager load progress
     result = await db.execute(
         select(Lesson)
         .options(
-            selectinload(Lesson.module).selectinload(Module.course)
+            selectinload(Lesson.module).selectinload(Module.course),
+            selectinload(Lesson.progress)
         )
         .where(Lesson.id == lesson_id)
     )
@@ -136,9 +137,21 @@ async def get_or_generate_lesson_content(
     if lesson.module.course.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to access this course")
 
+    # Helper function to format response
+    def format_response(l: Lesson):
+        return {
+            "id": l.id,
+            "module_id": l.module_id,
+            "course_id": l.module.course_id,
+            "title": l.title,
+            "content": l.content,
+            "quiz_data": l.quiz_data,
+            "progress": l.progress
+        }
+
     # If content already exists, return it!
     if lesson.content:
-        return lesson
+        return format_response(lesson)
         
     # Content does NOT exist. We need to generate it just in time!
     try:
@@ -156,7 +169,67 @@ async def get_or_generate_lesson_content(
         await db.commit()
         await db.refresh(lesson)
         
-        return lesson
+        return format_response(lesson)
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM Generation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"LLM Generation failed: {repr(e)}")
+
+@router.get("/{course_id}/progress", response_model=list[UserProgressResponse])
+async def get_course_progress(
+    course_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get user progress for all lessons in a course.
+    """
+    result = await db.execute(
+        select(UserProgress)
+        .join(Lesson, UserProgress.lesson_id == Lesson.id)
+        .join(Module, Lesson.module_id == Module.id)
+        .where(Module.course_id == course_id)
+        .where(UserProgress.user_id == current_user.id)
+    )
+    return result.scalars().all()
+
+@router.post("/lessons/{lesson_id}/progress", response_model=UserProgressResponse)
+async def update_lesson_progress(
+    lesson_id: int,
+    progress_req: UserProgressRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update or create a user's progress for a specific lesson.
+    """
+    # Check if progress exists
+    result = await db.execute(
+        select(UserProgress)
+        .where(UserProgress.lesson_id == lesson_id)
+        .where(UserProgress.user_id == current_user.id)
+    )
+    progress = result.scalar_one_or_none()
+    
+    if progress:
+        progress.is_completed = progress_req.is_completed
+        if progress_req.quiz_score is not None:
+            progress.quiz_score = progress_req.quiz_score
+    else:
+        # Check if lesson exists
+        lesson_result = await db.execute(select(Lesson).where(Lesson.id == lesson_id))
+        if not lesson_result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Lesson not found")
+            
+        progress = UserProgress(
+            user_id=current_user.id,
+            lesson_id=lesson_id,
+            is_completed=progress_req.is_completed,
+            quiz_score=progress_req.quiz_score
+        )
+        db.add(progress)
+        
+    await db.commit()
+    await db.refresh(progress)
+    return progress

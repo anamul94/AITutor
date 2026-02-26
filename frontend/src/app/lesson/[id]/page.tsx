@@ -16,7 +16,10 @@ export default function LessonPage() {
   const { user, loading } = useAuth();
 
   const [lesson, setLesson] = useState<any>(null);
+  const [course, setCourse] = useState<any>(null);
+  const [nextLessonId, setNextLessonId] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(true);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   // Quiz State
   const [quizScore, setQuizScore] = useState<number | null>(null);
@@ -34,6 +37,17 @@ export default function LessonPage() {
       // This endpoint triggers Bedrock to generate the content JIT if it doesn't exist
       const { data } = await api.get(`/api/courses/lessons/${id}`);
       setLesson(data);
+
+      // Fetch the full course to find the next lesson
+      const courseRes = await api.get(`/api/courses/${data.course_id}`);
+      setCourse(courseRes.data);
+
+      const allLessons = courseRes.data.modules.flatMap((m: any) => m.lessons);
+      const currentIndex = allLessons.findIndex((l: any) => l.id === data.id);
+      if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
+        setNextLessonId(allLessons[currentIndex + 1].id);
+      }
+
     } catch (err) {
       console.error("Failed to fetch/generate lesson", err);
       router.push('/dashboard');
@@ -54,8 +68,25 @@ export default function LessonPage() {
 
     setQuizScore(score);
     setShowResults(true);
+  };
 
-    // In a future phase, we would POST this score to /api/progress
+  const handleCompleteLesson = async () => {
+    try {
+      setIsCompleting(true);
+      await api.post(`/api/courses/lessons/${id}/progress`, {
+        is_completed: true,
+        quiz_score: quizScore
+      });
+
+      if (nextLessonId) {
+        router.push(`/lesson/${nextLessonId}`);
+      } else {
+        router.push(`/course/${lesson.course_id}`);
+      }
+    } catch (err) {
+      console.error("Failed to mark complete", err);
+      setIsCompleting(false);
+    }
   };
 
   if (isGenerating) {
@@ -95,7 +126,7 @@ export default function LessonPage() {
         </header>
 
         {/* AI Generated Markdown Content */}
-        <article className="prose prose-invert prose-blue max-w-none mb-16 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800">
+        <article className="prose prose-invert prose-blue max-w-none mb-16 prose-headings:text-blue-400 prose-a:text-blue-500 hover:prose-a:text-blue-400 prose-strong:text-white prose-code:text-pink-400 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 bg-gray-900/40 p-8 md:p-12 rounded-3xl border border-gray-800/60 shadow-xl leading-relaxed text-gray-300">
           <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
             {lesson.content}
           </ReactMarkdown>
@@ -193,13 +224,22 @@ export default function LessonPage() {
                 <p className="text-gray-400">Select an answer for each question to complete the lesson.</p>
               )}
 
-              {!showResults && (
+              {!showResults ? (
                 <button
                   onClick={handleQuizSubmit}
                   disabled={Object.keys(selectedAnswers).length < lesson.quiz_data.length}
                   className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold transition-colors"
                 >
                   Submit Quiz
+                </button>
+              ) : (
+                <button
+                  onClick={handleCompleteLesson}
+                  disabled={isCompleting}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 disabled:cursor-not-allowed flex items-center gap-2 text-white px-8 py-3 rounded-xl font-bold transition-colors"
+                >
+                  {isCompleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                  {nextLessonId ? "Complete & Continue" : "Complete Course"}
                 </button>
               )}
             </div>

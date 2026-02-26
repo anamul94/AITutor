@@ -50,8 +50,21 @@ class CourseResponse(BaseModel):
     topic: str
     modules: List[ModuleResponse]
 
+class UserProgressRequest(BaseModel):
+    is_completed: bool = True
+    quiz_score: Optional[int] = None
+
+class UserProgressResponse(BaseModel):
+    id: int
+    lesson_id: int
+    is_completed: bool
+    quiz_score: Optional[int]
+    
 class LessonContentResponse(BaseModel):
     id: int
+    module_id: int
+    course_id: int
     title: str
     content: Optional[str]
     quiz_data: Optional[List[dict]]
+    progress: Optional[List[UserProgressResponse]] = []

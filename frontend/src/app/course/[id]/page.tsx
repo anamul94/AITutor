@@ -12,11 +12,15 @@ export default function CoursePage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [course, setCourse] = useState<any>(null);
+  const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
-    if (user && id) fetchCourse();
+    if (user && id) {
+      fetchCourse();
+      fetchProgress();
+    }
   }, [user, id, loading]);
 
   const fetchCourse = async () => {
@@ -28,6 +32,15 @@ export default function CoursePage() {
       router.push('/dashboard');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchProgress = async () => {
+    try {
+      const { data } = await api.get(`/api/courses/${id}/progress`);
+      setProgress(data);
+    } catch (err) {
+      console.error("Failed to fetch progress", err);
     }
   };
 
@@ -78,28 +91,41 @@ export default function CoursePage() {
               </div>
 
               <div className="divide-y divide-gray-800">
-                {module.lessons.map((lesson: any) => (
-                  <div
-                    key={lesson.id}
-                    onClick={() => router.push(`/lesson/${lesson.id}`)}
-                    className="p-5 flex items-center justify-between hover:bg-gray-800/50 cursor-pointer transition-colors group"
-                  >
-                    <div className="flex items-center gap-4">
+                {module.lessons.map((lesson: any) => {
+                  const lessonProgress = progress.find(p => p.lesson_id === lesson.id);
+                  const isCompleted = lessonProgress?.is_completed;
 
-                      {/* Empty circle for uncompleted vs CheckCircle for completed */}
-                      <div className="w-8 h-8 rounded-full border-2 border-gray-700 flex items-center justify-center group-hover:border-blue-500 transition-colors">
-                        <PlayCircle className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                  return (
+                    <div
+                      key={lesson.id}
+                      onClick={() => router.push(`/lesson/${lesson.id}`)}
+                      className="p-5 flex items-center justify-between hover:bg-gray-800/50 cursor-pointer transition-colors group"
+                    >
+                      <div className="flex items-center gap-4">
+
+                        {/* Completed Checkmark vs Uncompleted Play */}
+                        {isCompleted ? (
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-green-500/20 text-green-500">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full border-2 border-gray-700 flex items-center justify-center group-hover:border-blue-500 transition-colors">
+                            <PlayCircle className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                          </div>
+                        )}
+
+                        <div>
+                          <p className="text-sm text-gray-400 mb-1">Lesson {module.order_index}.{lesson.order_index}</p>
+                          <h4 className={`font-medium transition-colors ${isCompleted ? 'text-gray-300' : 'group-hover:text-white'}`}>
+                            {lesson.title}
+                          </h4>
+                        </div>
                       </div>
 
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">Lesson {module.order_index}.{lesson.order_index}</p>
-                        <h4 className="font-medium group-hover:text-white transition-colors">{lesson.title}</h4>
-                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-600 group-hover:text-blue-500 transition-colors" />
                     </div>
-
-                    <ChevronRight className="w-5 h-5 text-gray-600 group-hover:text-blue-500 transition-colors" />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
