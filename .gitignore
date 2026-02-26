@@ -1,0 +1,64 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python / Backend
+backend/venv/
+backend/__pycache__/
+backend/.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.mypy_cache/
+.pyre/
+.ruff_cache/
+backend/alembic/versions/*
+!backend/alembic/versions/.gitkeep
+
+# Next.js / Frontend
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.swc/
+frontend/.DS_Store
+*.pem
+
+# Vercel / Next.js
+frontend/.vercel/
+
+# TypeScript
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
