@@ -38,6 +38,10 @@ export default function LessonPage() {
       const { data } = await api.get(`/api/courses/lessons/${id}`);
       setLesson(data);
 
+      if (data.progress && data.progress.length > 0) {
+        setIsCompleted(data.progress[0].is_completed);
+      }
+
       // Fetch the full course to find the next lesson
       const courseRes = await api.get(`/api/courses/${data.course_id}`);
       setCourse(courseRes.data);
@@ -70,6 +74,8 @@ export default function LessonPage() {
     setShowResults(true);
   };
 
+  const [isCompleted, setIsCompleted] = useState(false);
+
   const handleCompleteLesson = async () => {
     try {
       setIsCompleting(true);
@@ -77,15 +83,19 @@ export default function LessonPage() {
         is_completed: true,
         quiz_score: quizScore
       });
-
-      if (nextLessonId) {
-        router.push(`/lesson/${nextLessonId}`);
-      } else {
-        router.push(`/course/${lesson.course_id}`);
-      }
+      setIsCompleted(true);
+      setIsCompleting(false);
     } catch (err) {
       console.error("Failed to mark complete", err);
       setIsCompleting(false);
+    }
+  };
+
+  const handleContinue = () => {
+    if (nextLessonId) {
+      router.push(`/lesson/${nextLessonId}`);
+    } else {
+      router.push(`/course/${lesson.course_id}`);
     }
   };
 
@@ -108,7 +118,7 @@ export default function LessonPage() {
       {/* Top Navigation */}
       <div className="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push(`/course/${lesson.course_id}`)}
           className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Syllabus
@@ -119,10 +129,18 @@ export default function LessonPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
-        <header className="mb-12">
-          <h1 className="text-4xl md:text-5xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+        <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <h1 className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
             {lesson.title}
           </h1>
+          <button
+            onClick={handleCompleteLesson}
+            disabled={isCompleting || isCompleted}
+            className={`flex flex-shrink-0 items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors border ${isCompleted ? 'bg-green-600/20 border-green-500/50 text-green-400' : 'bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800/50 text-white border-gray-700'}`}
+          >
+            {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className={`w-4 h-4 ${isCompleted ? 'text-green-400' : 'text-green-500'}`} />}
+            {isCompleted ? "Completed" : "Mark as Complete"}
+          </button>
         </header>
 
         {/* AI Generated Markdown Content */}
@@ -234,12 +252,10 @@ export default function LessonPage() {
                 </button>
               ) : (
                 <button
-                  onClick={handleCompleteLesson}
-                  disabled={isCompleting}
-                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 disabled:cursor-not-allowed flex items-center gap-2 text-white px-8 py-3 rounded-xl font-bold transition-colors"
+                  onClick={() => nextLessonId ? router.push(`/lesson/${nextLessonId}`) : router.push(`/course/${lesson.course_id}`)}
+                  className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2 text-white px-8 py-3 rounded-xl font-bold transition-colors"
                 >
-                  {isCompleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-                  {nextLessonId ? "Complete & Continue" : "Complete Course"}
+                  {nextLessonId ? "Next Lesson" : "Finish Course"}
                 </button>
               )}
             </div>
