@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, BookOpen, Clock, Activity, Settings, User as UserIcon, Plus, X, Sparkles, Loader2 } from 'lucide-react';
+import { LogOut, BookOpen, Clock, Activity, Settings, User as UserIcon, Plus, X, Sparkles, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 
 export default function DashboardPage() {
+  type PreferredLevelOption = 'auto' | 'beginner' | 'intermediate' | 'advanced';
+
   const { user, loading, logout } = useAuth();
   const router = useRouter();
 
@@ -16,6 +18,9 @@ export default function DashboardPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showNewCourseModal, setShowNewCourseModal] = useState(false);
   const [topic, setTopic] = useState('');
+  const [learningGoal, setLearningGoal] = useState('');
+  const [preferredLevel, setPreferredLevel] = useState<PreferredLevelOption>('auto');
+  const [deletingCourseId, setDeletingCourseId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -47,14 +52,42 @@ export default function DashboardPage() {
     setError('');
 
     try {
-      const { data } = await api.post('/api/courses/generate', { topic });
+      const normalizedLearningGoal = learningGoal.trim();
+      const payload = {
+        topic: topic.trim(),
+        learning_goal: normalizedLearningGoal || null,
+        preferred_level: preferredLevel === 'auto' ? null : preferredLevel,
+      };
+
+      const { data } = await api.post('/api/courses/generate', payload);
       setCourses([data, ...courses]);
       setShowNewCourseModal(false);
       setTopic('');
+      setLearningGoal('');
+      setPreferredLevel('auto');
+      if (data?.id) {
+        router.push(`/course/${data.id}`);
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to generate course. Please try again.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: number, courseTitle: string) => {
+    const confirmed = window.confirm(`Delete "${courseTitle}"? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingCourseId(courseId);
+    setError('');
+    try {
+      await api.delete(`/api/courses/${courseId}`);
+      setCourses((prevCourses) => prevCourses.filter((course) => course.id !== courseId));
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete course. Please try again.');
+    } finally {
+      setDeletingCourseId(null);
     }
   };
 
@@ -163,18 +196,50 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {courses.map((course) => (
-                <div key={course.id} onClick={() => router.push(`/course/${course.id}`)} className="group cursor-pointer p-5 rounded-xl bg-gray-950/50 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-800/50 transition-all">
-                  <div className="flex justify-between items-start mb-3">
-                    <h4 className="font-medium text-lg group-hover:text-blue-400 transition-colors line-clamp-1">{course.title}</h4>
+              {courses.map((course) => {
+                const rawProgress = typeof course.progress_percentage === 'number' ? course.progress_percentage : 0;
+                const progress = Math.min(100, Math.max(0, rawProgress));
+
+                return (
+                  <div key={course.id} onClick={() => router.push(`/course/${course.id}`)} className="group cursor-pointer p-5 rounded-xl bg-gray-950/50 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-800/50 transition-all">
+                    <div className="flex justify-between items-start mb-3">
+                      <h4 className="font-medium text-lg group-hover:text-blue-400 transition-colors line-clamp-1">{course.title}</h4>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCourse(course.id, course.title);
+                        }}
+                        disabled={deletingCourseId === course.id}
+                        className="inline-flex items-center gap-1 text-xs text-red-400 hover:text-red-300 disabled:text-gray-500 disabled:cursor-not-allowed px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
+                        aria-label={`Delete ${course.title}`}
+                      >
+                        {deletingCourseId === course.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                        {deletingCourseId === course.id ? 'Deleting' : 'Delete'}
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-500 line-clamp-2 mb-4">{course.description}</p>
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                        <span>{progress.toFixed(1)}% complete</span>
+                        <span>{course.modules.length} Modules</span>
+                      </div>
+                      <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end text-xs text-gray-400">
+                      <span className="text-blue-500 group-hover:underline">Start Learning →</span>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500 line-clamp-2 mb-4">{course.description}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span className="bg-gray-800 px-2 py-1 rounded-md">{course.modules.length} Modules</span>
-                    <span className="text-blue-500 group-hover:underline">Start Learning →</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -231,6 +296,41 @@ export default function DashboardPage() {
                       disabled={isGenerating}
                       required
                     />
+                  </div>
+
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Learning Goal (optional)
+                    </label>
+                    <textarea
+                      className="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-24 resize-y"
+                      placeholder="e.g. Build and deploy a production-ready FastAPI backend in 6 weeks."
+                      value={learningGoal}
+                      onChange={(e) => setLearningGoal(e.target.value)}
+                      disabled={isGenerating}
+                      minLength={10}
+                      maxLength={300}
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      If provided, this should be 10-300 characters and will shape lesson examples.
+                    </p>
+                  </div>
+
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Preferred Level
+                    </label>
+                    <select
+                      className="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      value={preferredLevel}
+                      onChange={(e) => setPreferredLevel(e.target.value as PreferredLevelOption)}
+                      disabled={isGenerating}
+                    >
+                      <option value="auto">Auto (Infer from topic)</option>
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
                   </div>
 
                   {error && (

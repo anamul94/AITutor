@@ -1,10 +1,13 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Literal, Optional
 
 # --- LangChain Structured Output Schemas ---
 
 class GeneratedLessonSchema(BaseModel):
     title: str = Field(description="The title of the lesson")
+    description: str = Field(
+        description="A focused 1-3 sentence summary describing what this lesson must cover in detail."
+    )
     order_index: int = Field(description="The order of the lesson in the module, starting at 1")
 
 class GeneratedModuleSchema(BaseModel):
@@ -29,12 +32,33 @@ class GeneratedLessonContentSchema(BaseModel):
 
 # --- API Request/Response Schemas ---
 
+PreferredLevel = Literal["beginner", "intermediate", "advanced"]
+
+
 class CourseGenerateRequest(BaseModel):
     topic: str
+    learning_goal: Optional[str] = None
+    preferred_level: Optional[PreferredLevel] = None
+
+    @field_validator("learning_goal", mode="before")
+    @classmethod
+    def normalize_learning_goal(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not 10 <= len(normalized) <= 300:
+            raise ValueError("learning_goal must be between 10 and 300 characters")
+        return normalized
 
 class LessonResponse(BaseModel):
     id: int
     title: str
+    description: Optional[str] = None
     order_index: int
 
 class ModuleResponse(BaseModel):
@@ -48,6 +72,9 @@ class CourseResponse(BaseModel):
     title: str
     description: str
     topic: str
+    learning_goal: Optional[str] = None
+    preferred_level: Optional[PreferredLevel] = None
+    progress_percentage: float = 0.0
     modules: List[ModuleResponse]
 
 class UserProgressRequest(BaseModel):
@@ -65,6 +92,7 @@ class LessonContentResponse(BaseModel):
     module_id: int
     course_id: int
     title: str
+    description: Optional[str] = None
     content: Optional[str]
     quiz_data: Optional[List[dict]]
     progress: Optional[List[UserProgressResponse]] = []

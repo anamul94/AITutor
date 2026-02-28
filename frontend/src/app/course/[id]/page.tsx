@@ -119,6 +119,11 @@ export default function CoursePage() {
                           <h4 className={`font-medium transition-colors ${isCompleted ? 'text-gray-300' : 'group-hover:text-white'}`}>
                             {lesson.title}
                           </h4>
+                          {lesson.description && (
+                            <p className="text-sm text-gray-500 mt-1 line-clamp-2 max-w-2xl">
+                              {lesson.description}
+                            </p>
+                          )}
                         </div>
                       </div>
 
