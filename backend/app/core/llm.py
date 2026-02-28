@@ -1,6 +1,6 @@
 import os
 from langchain_aws import ChatBedrockConverse
-from langchain_ollama import ChatOllama
+
 from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.prompts import ChatPromptTemplate
 from app.schemas.course import GeneratedCourseSchema, GeneratedLessonContentSchema
@@ -156,8 +156,7 @@ async def generate_course_syllabus(
     """
     Generates a structured outline for a course based on a topic.
     """
-    # llm = get_llm()
-    llm = get_ollama_llm()
+    llm = get_llm()
     
     structured_llm = llm.with_structured_output(GeneratedCourseSchema, include_raw=True)
     
@@ -283,8 +282,7 @@ async def generate_lesson_content(
     """
     Generates the actual Markdown content and Quiz for a specific lesson.
     """
-    # llm = get_llm()
-    llm = get_ollama_llm()
+    llm = get_llm()
     
     structured_llm = llm.with_structured_output(GeneratedLessonContentSchema, include_raw=True)
     
