@@ -22,7 +22,12 @@ class Course(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User", backref="courses")
-    modules = relationship("Module", back_populates="course", cascade="all, delete-orphan")
+    modules = relationship(
+        "Module",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        order_by="Module.order_index",
+    )
 
 class Module(Base):
     __tablename__ = "modules"
@@ -33,7 +38,12 @@ class Module(Base):
     order_index = Column(Integer, nullable=False)
 
     course = relationship("Course", back_populates="modules")
-    lessons = relationship("Lesson", back_populates="module", cascade="all, delete-orphan")
+    lessons = relationship(
+        "Lesson",
+        back_populates="module",
+        cascade="all, delete-orphan",
+        order_by="Lesson.order_index",
+    )
 
 class Lesson(Base):
     __tablename__ = "lessons"
@@ -45,6 +55,7 @@ class Lesson(Base):
     order_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=True)  # Markdown content generated dynamically
     quiz_data = Column(JSON, nullable=True) # JSON generated dynamically
+    content_generated_at = Column(DateTime(timezone=True), nullable=True)
 
     module = relationship("Module", back_populates="lessons")
     progress = relationship("UserProgress", back_populates="lesson", cascade="all, delete-orphan")
@@ -61,3 +72,14 @@ class UserProgress(Base):
 
     user = relationship("User", backref="progress")
     lesson = relationship("Lesson", back_populates="progress")
+
+class LLMUsageEvent(Base):
+    __tablename__ = "llm_usage_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    operation = Column(String(50), nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    total_tokens = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

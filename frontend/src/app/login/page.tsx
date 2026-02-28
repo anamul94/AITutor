@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import axios from 'axios';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -28,9 +29,13 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
 
-      login(res.data.access_token);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Invalid email or password.');
+      await login(res.data.access_token);
+    } catch (err: unknown) {
+      setError(
+        axios.isAxiosError(err)
+          ? (err.response?.data?.detail as string) || 'Invalid email or password.'
+          : 'Invalid email or password.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -115,9 +120,15 @@ export default function LoginPage() {
 
         <div className="px-8 py-5 bg-gray-900 border-t border-gray-800 text-center">
           <p className="text-sm text-gray-400">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/register" className="font-medium text-blue-500 hover:text-blue-400 transition-colors">
               Sign up
+            </Link>
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            Admin setup?{' '}
+            <Link href="/admin/register" className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
+              Register admin
             </Link>
           </p>
         </div>

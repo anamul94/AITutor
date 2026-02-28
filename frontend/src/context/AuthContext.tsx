@@ -8,13 +8,16 @@ interface User {
   id: number;
   email: string;
   is_active: boolean;
+  is_admin: boolean;
+  plan_type: 'free' | 'premium';
+  trial_expires_at: string | null;
   created_at: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (token: string) => void;
+  login: (token: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -48,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.get('/auth/me');
       setUser(res.data);
-      router.push('/dashboard');
+      router.push(res.data?.is_admin ? '/admin/dashboard' : '/dashboard');
     } catch (error) {
       console.error("Failed to fetch user during login", error);
       localStorage.removeItem('token');

@@ -1,19 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { UserPlus, Mail, Lock, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, KeyRound, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
-export default function RegisterPage() {
+export default function AdminRegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { user, loading, login } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.push(user.is_admin ? '/admin/dashboard' : '/dashboard');
+    }
+  }, [loading, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,24 +30,25 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      // 1. Register the user
-      await api.post('/auth/register', { email, password });
+      await api.post('/api/admin/register', {
+        email: email.trim(),
+        password,
+        admin_key: adminKey.trim(),
+      });
 
-      // 2. Automatically log them in
       const formData = new URLSearchParams();
-      formData.append('username', email);
+      formData.append('username', email.trim());
       formData.append('password', password);
 
       const res = await api.post('/auth/login', formData, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
-
       await login(res.data.access_token);
     } catch (err: unknown) {
       setError(
         axios.isAxiosError(err)
-          ? (err.response?.data?.detail as string) || 'Registration failed. Please try again.'
-          : 'Registration failed. Please try again.'
+          ? (err.response?.data?.detail as string) || 'Admin registration failed. Please check your key.'
+          : 'Admin registration failed. Please check your key.'
       );
     } finally {
       setIsLoading(false);
@@ -55,11 +65,11 @@ export default function RegisterPage() {
       >
         <div className="p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 mb-4">
-              <UserPlus className="w-8 h-8 text-blue-500" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 mb-4">
+              <ShieldCheck className="w-8 h-8 text-emerald-400" />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
-            <p className="text-gray-400">Join AITutor to start learning</p>
+            <h1 className="text-3xl font-bold text-white mb-2">Admin Registration</h1>
+            <p className="text-gray-400">Create an administrator account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -84,8 +94,8 @@ export default function RegisterPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="you@example.com"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  placeholder="admin@example.com"
                   required
                 />
               </div>
@@ -101,7 +111,7 @@ export default function RegisterPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                   placeholder="••••••••"
                   required
                   minLength={6}
@@ -109,15 +119,32 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Admin Key</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <KeyRound className="h-5 w-5 text-gray-500" />
+                </div>
+                <input
+                  type="password"
+                  value={adminKey}
+                  onChange={(e) => setAdminKey(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-lg bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  placeholder="Enter admin registration key"
+                  required
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:ring-offset-gray-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
               ) : (
-                'Sign Up'
+                'Create Admin Account'
               )}
             </button>
           </form>
@@ -125,15 +152,9 @@ export default function RegisterPage() {
 
         <div className="px-8 py-5 bg-gray-900 border-t border-gray-800 text-center">
           <p className="text-sm text-gray-400">
-            Already have an account?{' '}
-            <Link href="/login" className="font-medium text-blue-500 hover:text-blue-400 transition-colors">
-              Log in
-            </Link>
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Need admin access?{' '}
-            <Link href="/admin/register" className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
-              Register admin
+            Back to{' '}
+            <Link href="/login" className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
+              user login
             </Link>
           </p>
         </div>

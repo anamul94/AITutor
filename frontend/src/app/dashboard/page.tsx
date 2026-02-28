@@ -1,20 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, BookOpen, Clock, Activity, Settings, User as UserIcon, Plus, X, Sparkles, Loader2, Trash2 } from 'lucide-react';
+import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 
 export default function DashboardPage() {
   type PreferredLevelOption = 'auto' | 'beginner' | 'intermediate' | 'advanced';
+  interface CourseSummary {
+    id: number;
+    title: string;
+    description: string;
+    progress_percentage?: number;
+    modules: { id: number }[];
+  }
 
   const { user, loading, logout } = useAuth();
   const router = useRouter();
 
   // State for Course Generation
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showNewCourseModal, setShowNewCourseModal] = useState(false);
   const [topic, setTopic] = useState('');
@@ -27,22 +35,25 @@ export default function DashboardPage() {
     if (!loading && !user) {
       router.push('/login');
     }
+    if (user?.is_admin) {
+      router.push('/admin/dashboard');
+    }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (user) {
-      fetchCourses();
-    }
-  }, [user]);
-
-  const fetchCourses = async () => {
+  const fetchCourses = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/courses/user/courses');
+      const { data } = await api.get<CourseSummary[]>('/api/courses/user/courses');
       setCourses(data);
     } catch (err) {
       console.error("Failed to fetch courses", err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user && !user.is_admin) {
+      fetchCourses();
+    }
+  }, [user, fetchCourses]);
 
   const handleGenerateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +70,8 @@ export default function DashboardPage() {
         preferred_level: preferredLevel === 'auto' ? null : preferredLevel,
       };
 
-      const { data } = await api.post('/api/courses/generate', payload);
-      setCourses([data, ...courses]);
+      const { data } = await api.post<CourseSummary>('/api/courses/generate', payload);
+      setCourses((prevCourses) => [data, ...prevCourses]);
       setShowNewCourseModal(false);
       setTopic('');
       setLearningGoal('');
@@ -68,8 +79,12 @@ export default function DashboardPage() {
       if (data?.id) {
         router.push(`/course/${data.id}`);
       }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to generate course. Please try again.');
+    } catch (err: unknown) {
+      setError(
+        axios.isAxiosError(err)
+          ? (err.response?.data?.detail as string) || 'Failed to generate course. Please try again.'
+          : 'Failed to generate course. Please try again.'
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -84,8 +99,12 @@ export default function DashboardPage() {
     try {
       await api.delete(`/api/courses/${courseId}`);
       setCourses((prevCourses) => prevCourses.filter((course) => course.id !== courseId));
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete course. Please try again.');
+    } catch (err: unknown) {
+      setError(
+        axios.isAxiosError(err)
+          ? (err.response?.data?.detail as string) || 'Failed to delete course. Please try again.'
+          : 'Failed to delete course. Please try again.'
+      );
     } finally {
       setDeletingCourseId(null);
     }
@@ -137,7 +156,7 @@ export default function DashboardPage() {
         <header className="flex justify-between items-center mb-10">
           <div>
             <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
-            <p className="text-gray-400">Here's your learning overview for today.</p>
+            <p className="text-gray-400">Here is your learning overview for today.</p>
           </div>
           <div className="flex items-center gap-4">
             <button

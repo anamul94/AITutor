@@ -1,70 +1,127 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, BookOpen, CheckCircle, BrainCircuit, Loader2 } from 'lucide-react';
+import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css'; // For markdown code blocks
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+
+interface LessonProgressRow {
+  lesson_id: number;
+  is_completed: boolean;
+}
+
+interface LessonQuizQuestion {
+  question: string;
+  options: string[];
+  correct_answer_index: number;
+  explanation: string;
+}
+
+interface LessonContent {
+  id: number;
+  course_id: number;
+  title: string;
+  content: string;
+  quiz_data: LessonQuizQuestion[];
+  progress?: LessonProgressRow[];
+}
+
+interface CourseLesson {
+  id: number;
+  order_index: number;
+}
+
+interface CourseModule {
+  order_index: number;
+  lessons: CourseLesson[];
+}
+
+interface CourseData {
+  modules: CourseModule[];
+}
 
 export default function LessonPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user, loading } = useAuth();
 
-  const [lesson, setLesson] = useState<any>(null);
-  const [course, setCourse] = useState<any>(null);
+  const [lesson, setLesson] = useState<LessonContent | null>(null);
   const [nextLessonId, setNextLessonId] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(true);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [error, setError] = useState('');
 
   // Quiz State
   const [quizScore, setQuizScore] = useState<number | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [showResults, setShowResults] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !user) router.push('/login');
-    if (user && id) fetchLessonContent();
-  }, [user, id, loading]);
+  const parseApiError = useCallback((err: unknown, fallbackMessage: string): string => (
+    axios.isAxiosError(err)
+      ? (err.response?.data?.detail as string) || fallbackMessage
+      : fallbackMessage
+  ), []);
 
-  const fetchLessonContent = async () => {
+  const fetchLessonContent = useCallback(async () => {
     try {
       setIsGenerating(true);
+      setError('');
+      setIsCompleted(false);
+      setNextLessonId(null);
+      setSelectedAnswers({});
+      setShowResults(false);
+      setQuizScore(null);
+
       // This endpoint triggers Bedrock to generate the content JIT if it doesn't exist
-      const { data } = await api.get(`/api/courses/lessons/${id}`);
+      const { data } = await api.get<LessonContent>(`/api/courses/lessons/${id}`);
       setLesson(data);
 
-      if (data.progress && data.progress.length > 0) {
-        setIsCompleted(data.progress[0].is_completed);
-      }
+      const progressRow = data.progress?.find((row) => row.lesson_id === data.id);
+      setIsCompleted(Boolean(progressRow?.is_completed));
 
       // Fetch the full course to find the next lesson
-      const courseRes = await api.get(`/api/courses/${data.course_id}`);
-      setCourse(courseRes.data);
+      const courseRes = await api.get<CourseData>(`/api/courses/${data.course_id}`);
 
-      const allLessons = courseRes.data.modules.flatMap((m: any) => m.lessons);
-      const currentIndex = allLessons.findIndex((l: any) => l.id === data.id);
+      const allLessons = courseRes.data.modules
+        .slice()
+        .sort((a, b) => a.order_index - b.order_index)
+        .flatMap((module) =>
+          module.lessons
+            .slice()
+            .sort((a, b) => a.order_index - b.order_index)
+        );
+      const currentIndex = allLessons.findIndex((l) => l.id === data.id);
       if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
         setNextLessonId(allLessons[currentIndex + 1].id);
+      } else {
+        setNextLessonId(null);
       }
 
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to fetch/generate lesson", err);
-      router.push('/dashboard');
+      setError(parseApiError(err, 'Failed to load lesson.'));
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [id, parseApiError]);
+
+  useEffect(() => {
+    if (!loading && !user) router.push('/login');
+    if (user && id) fetchLessonContent();
+  }, [user, id, loading, router, fetchLessonContent]);
 
   const handleQuizSubmit = () => {
     if (!lesson?.quiz_data) return;
 
     let score = 0;
-    lesson.quiz_data.forEach((q: any, i: number) => {
+    lesson.quiz_data.forEach((q, i) => {
       if (selectedAnswers[i] === q.correct_answer_index) {
         score++;
       }
@@ -77,25 +134,21 @@ export default function LessonPage() {
   const [isCompleted, setIsCompleted] = useState(false);
 
   const handleCompleteLesson = async () => {
+    if (!lesson) return;
+
     try {
       setIsCompleting(true);
-      await api.post(`/api/courses/lessons/${id}/progress`, {
+      setError('');
+      await api.post(`/api/courses/lessons/${lesson.id}/progress`, {
         is_completed: true,
         quiz_score: quizScore
       });
       setIsCompleted(true);
-      setIsCompleting(false);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to mark complete", err);
+      setError(parseApiError(err, 'Failed to mark lesson as complete.'));
+    } finally {
       setIsCompleting(false);
-    }
-  };
-
-  const handleContinue = () => {
-    if (nextLessonId) {
-      router.push(`/lesson/${nextLessonId}`);
-    } else {
-      router.push(`/course/${lesson.course_id}`);
     }
   };
 
@@ -111,7 +164,25 @@ export default function LessonPage() {
     );
   }
 
-  if (!lesson) return null;
+  if (!lesson) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center px-6">
+        <div className="max-w-xl w-full">
+          {error && (
+            <div className="mb-4 p-4 rounded-xl border border-red-500/50 bg-red-500/10 text-red-300">
+              {error}
+            </div>
+          )}
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -129,6 +200,12 @@ export default function LessonPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
+        {error && (
+          <div className="mb-6 p-4 rounded-xl border border-red-500/50 bg-red-500/10 text-red-300">
+            {error}
+          </div>
+        )}
+
         <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <h1 className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
             {lesson.title}
@@ -145,7 +222,7 @@ export default function LessonPage() {
 
         {/* AI Generated Markdown Content */}
         <article className="prose prose-invert prose-blue max-w-none mb-16 prose-headings:text-blue-400 prose-a:text-blue-500 hover:prose-a:text-blue-400 prose-strong:text-white prose-code:text-pink-400 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-800 bg-gray-900/40 p-8 md:p-12 rounded-3xl border border-gray-800/60 shadow-xl leading-relaxed text-gray-300">
-          <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
             {lesson.content}
           </ReactMarkdown>
         </article>
@@ -164,7 +241,7 @@ export default function LessonPage() {
             </div>
 
             <div className="space-y-10">
-              {lesson.quiz_data.map((q: any, qIndex: number) => (
+              {lesson.quiz_data.map((q, qIndex: number) => (
                 <div key={qIndex} className="bg-gray-950/50 rounded-xl p-6 border border-gray-800/50">
                   <p className="text-lg font-medium text-white mb-4">
                     <span className="text-blue-500 mr-2">{qIndex + 1}.</span> {q.question}

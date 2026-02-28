@@ -1,31 +1,48 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { ChevronRight, PlayCircle, CheckCircle2, ArrowLeft, BookOpen, Clock } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+
+interface LessonItem {
+  id: number;
+  title: string;
+  description?: string | null;
+  order_index: number;
+}
+
+interface ModuleItem {
+  id: number;
+  title: string;
+  order_index: number;
+  lessons: LessonItem[];
+}
+
+interface CourseData {
+  id: number;
+  title: string;
+  description: string;
+  modules: ModuleItem[];
+}
+
+interface ProgressRow {
+  lesson_id: number;
+  is_completed: boolean;
+}
 
 export default function CoursePage() {
   const { id } = useParams();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const [course, setCourse] = useState<any>(null);
-  const [progress, setProgress] = useState<any[]>([]);
+  const [course, setCourse] = useState<CourseData | null>(null);
+  const [progress, setProgress] = useState<ProgressRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (!loading && !user) router.push('/login');
-    if (user && id) {
-      fetchCourse();
-      fetchProgress();
-    }
-  }, [user, id, loading]);
-
-  const fetchCourse = async () => {
+  const fetchCourse = useCallback(async () => {
     try {
-      const { data } = await api.get(`/api/courses/${id}`);
+      const { data } = await api.get<CourseData>(`/api/courses/${id}`);
       setCourse(data);
     } catch (err) {
       console.error("Failed to fetch course", err);
@@ -33,16 +50,37 @@ export default function CoursePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id, router]);
 
-  const fetchProgress = async () => {
+  const fetchProgress = useCallback(async () => {
     try {
-      const { data } = await api.get(`/api/courses/${id}/progress`);
+      const { data } = await api.get<ProgressRow[]>(`/api/courses/${id}/progress`);
       setProgress(data);
     } catch (err) {
       console.error("Failed to fetch progress", err);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (!loading && !user) router.push('/login');
+    if (user && id) {
+      fetchCourse();
+      fetchProgress();
+    }
+  }, [user, id, loading, router, fetchCourse, fetchProgress]);
+
+  const sortedModules = useMemo(() => {
+    if (!course) {
+      return [];
+    }
+    return course.modules
+      .slice()
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((module) => ({
+        ...module,
+        lessons: module.lessons.slice().sort((a, b) => a.order_index - b.order_index),
+      }));
+  }, [course]);
 
   if (isLoading || !course) {
     return (
@@ -75,13 +113,13 @@ export default function CoursePage() {
           </p>
           <div className="flex items-center gap-4 text-sm text-gray-500">
             <span className="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
-              <Clock className="w-4 h-4" /> {course.modules.length} Modules
+              <Clock className="w-4 h-4" /> {sortedModules.length} Modules
             </span>
           </div>
         </header>
 
         <div className="space-y-8">
-          {course.modules.map((module: any) => (
+          {sortedModules.map((module) => (
             <div key={module.id} className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
               <div className="p-6 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between">
                 <div>
@@ -91,7 +129,7 @@ export default function CoursePage() {
               </div>
 
               <div className="divide-y divide-gray-800">
-                {module.lessons.map((lesson: any) => {
+                {module.lessons.map((lesson) => {
                   const lessonProgress = progress.find(p => p.lesson_id === lesson.id);
                   const isCompleted = lessonProgress?.is_completed;
 

@@ -3,18 +3,22 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Home() {
   const router = useRouter();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      router.push('/dashboard');
-    } else {
-      router.push('/login');
+    if (loading) {
+      return;
     }
-  }, [router]);
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    router.push(user.is_admin ? '/admin/dashboard' : '/dashboard');
+  }, [router, user, loading]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950">
