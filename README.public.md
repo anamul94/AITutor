@@ -26,7 +26,7 @@ AI-native learning platform that turns a topic into a complete course, generates
 - **Built-in assessment**: every lesson includes a 3-question MCQ quiz with explanations.
 - **Just-in-time lesson generation**: compute is used only when content is opened.
 - **Plan-aware access control**:
-  - 7-day premium trial for new users
+  - 1-day premium trial by default (admin-configurable)
   - automatic downgrade to free
   - free limits: 1 course/day, 2 lessons/day
 - **Admin operations**:
@@ -90,6 +90,8 @@ Frontend (`frontend/.env.local`):
 - `GET /api/admin/insights`
 - `PATCH /api/admin/users/{user_id}/plan`
 - `PATCH /api/admin/users/{user_id}/status`
+- `GET /api/admin/settings/trial-days`
+- `PUT /api/admin/settings/trial-days`
 
 ## License
 

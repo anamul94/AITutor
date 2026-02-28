@@ -33,12 +33,14 @@ class GeneratedLessonContentSchema(BaseModel):
 # --- API Request/Response Schemas ---
 
 PreferredLevel = Literal["beginner", "intermediate", "advanced"]
+CourseLanguage = Literal["english", "bengali", "hindi"]
 
 
 class CourseGenerateRequest(BaseModel):
     topic: str
     learning_goal: Optional[str] = None
     preferred_level: Optional[PreferredLevel] = None
+    language: CourseLanguage = "english"
 
     @field_validator("learning_goal", mode="before")
     @classmethod
@@ -74,6 +76,7 @@ class CourseResponse(BaseModel):
     topic: str
     learning_goal: Optional[str] = None
     preferred_level: Optional[PreferredLevel] = None
+    language: CourseLanguage = "english"
     progress_percentage: float = 0.0
     modules: List[ModuleResponse]
 

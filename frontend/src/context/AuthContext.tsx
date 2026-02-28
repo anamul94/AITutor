@@ -18,7 +18,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (token: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,10 +58,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    router.push('/login');
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      // Logout should still succeed locally even if server call fails.
+      console.error('Failed to notify server during logout', error);
+    } finally {
+      localStorage.removeItem('token');
+      setUser(null);
+      router.push('/login');
+    }
   };
 
   return (

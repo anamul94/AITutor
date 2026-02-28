@@ -19,7 +19,8 @@ For a short public/open-source showcase version, see [README.public.md](/media/a
 - Delete user-owned courses.
 
 ### Plan and usage features
-- New user starts on a 7-day premium trial.
+- New user starts on a 1-day premium trial (default).
+- Trial days are configurable from the admin portal.
 - Automatic fallback to free plan after trial expiry.
 - Free plan limits:
   - 1 course generation/day
@@ -98,7 +99,7 @@ SECRET_KEY=replace_with_strong_secret
 ADMIN_REGISTRATION_KEY=replace_with_strong_admin_key
 ACCESS_TOKEN_EXPIRE_MINUTES=10080
 
-PREMIUM_TRIAL_DAYS=7
+PREMIUM_TRIAL_DAYS=1
 FREE_DAILY_COURSE_LIMIT=1
 FREE_DAILY_LESSON_LIMIT=2
 
@@ -173,6 +174,8 @@ make frontend   # run frontend
 - `GET /api/admin/users`
 - `PATCH /api/admin/users/{user_id}/plan`
 - `PATCH /api/admin/users/{user_id}/status`
+- `GET /api/admin/settings/trial-days`
+- `PUT /api/admin/settings/trial-days`
 
 ## Security and Access Rules
 

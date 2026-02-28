@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     ADMIN_REGISTRATION_KEY: str = "change_this_admin_registration_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
-    PREMIUM_TRIAL_DAYS: int = 7
+    PREMIUM_TRIAL_DAYS: int = 1
     FREE_DAILY_COURSE_LIMIT: int = 1
     FREE_DAILY_LESSON_LIMIT: int = 2
     

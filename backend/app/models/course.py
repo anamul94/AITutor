@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, JSON, String, Text, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.user import Base
@@ -10,6 +10,10 @@ class Course(Base):
             "preferred_level IS NULL OR preferred_level IN ('beginner', 'intermediate', 'advanced')",
             name="ck_courses_preferred_level",
         ),
+        CheckConstraint(
+            "language IN ('english', 'bengali', 'hindi')",
+            name="ck_courses_language",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -18,6 +22,7 @@ class Course(Base):
     topic = Column(String, index=True, nullable=False)
     learning_goal = Column(Text, nullable=True)
     preferred_level = Column(String(20), nullable=True)
+    language = Column(String(20), nullable=False, default="english", server_default=text("'english'"))
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

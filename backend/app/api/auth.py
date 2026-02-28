@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.api.deps import get_db, get_current_user
-from app.core.config import settings
+from app.core.runtime_settings import get_premium_trial_days
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, Token
@@ -21,11 +21,18 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="The user with this email already exists in the system",
         )
     
+    trial_days = await get_premium_trial_days(db)
+    trial_expires_at = None
+    plan_type = "free"
+    if trial_days > 0:
+        plan_type = "premium"
+        trial_expires_at = datetime.now(timezone.utc) + timedelta(days=trial_days)
+
     user = User(
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
-        plan_type="premium",
-        trial_expires_at=datetime.now(timezone.utc) + timedelta(days=settings.PREMIUM_TRIAL_DAYS),
+        plan_type=plan_type,
+        trial_expires_at=trial_expires_at,
     )
     db.add(user)
     await db.commit()
@@ -55,3 +62,9 @@ async def login(db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordReq
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(current_user: User = Depends(get_current_user)):
+    # JWT auth is stateless; logout is acknowledged client-side by removing the token.
+    return {"message": "Logged out successfully"}

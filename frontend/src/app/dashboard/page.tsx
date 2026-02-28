@@ -11,6 +11,7 @@ import api from '@/lib/api';
 
 export default function DashboardPage() {
   type PreferredLevelOption = 'auto' | 'beginner' | 'intermediate' | 'advanced';
+  type CourseLanguageOption = 'english' | 'bengali' | 'hindi';
   interface CourseSummary {
     id: number;
     title: string;
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const [topic, setTopic] = useState('');
   const [learningGoal, setLearningGoal] = useState('');
   const [preferredLevel, setPreferredLevel] = useState<PreferredLevelOption>('auto');
+  const [courseLanguage, setCourseLanguage] = useState<CourseLanguageOption>('english');
   const [deletingCourseId, setDeletingCourseId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -69,6 +71,7 @@ export default function DashboardPage() {
         topic: topic.trim(),
         learning_goal: normalizedLearningGoal || null,
         preferred_level: preferredLevel === 'auto' ? null : preferredLevel,
+        language: courseLanguage,
       };
 
       const { data } = await api.post<CourseSummary>('/api/courses/generate', payload);
@@ -77,6 +80,7 @@ export default function DashboardPage() {
       setTopic('');
       setLearningGoal('');
       setPreferredLevel('auto');
+      setCourseLanguage('english');
       if (data?.id) {
         router.push(`/course/${data.id}`);
       }
@@ -329,6 +333,22 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mt-2">
                       If provided, this should be 10-300 characters and will shape lesson examples.
                     </p>
+                  </div>
+
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Course Language
+                    </label>
+                    <select
+                      className="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      value={courseLanguage}
+                      onChange={(e) => setCourseLanguage(e.target.value as CourseLanguageOption)}
+                      disabled={isGenerating}
+                    >
+                      <option value="english">English</option>
+                      <option value="bengali">Bengali</option>
+                      <option value="hindi">Hindi</option>
+                    </select>
                   </div>
 
                   <div className="mb-6">

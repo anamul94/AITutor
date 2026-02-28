@@ -136,6 +136,7 @@ async def generate_and_save_course(
             topic=topic,
             learning_goal=request.learning_goal,
             preferred_level=request.preferred_level,
+            language=request.language,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM Generation failed: {str(e)}")
@@ -147,6 +148,7 @@ async def generate_and_save_course(
         topic=topic,
         learning_goal=request.learning_goal,
         preferred_level=request.preferred_level,
+        language=request.language,
         created_by=current_user.id
     )
     db.add(new_course)
@@ -325,6 +327,7 @@ async def get_or_generate_lesson_content(
             lesson_description=lesson.description,
             learning_goal=lesson.module.course.learning_goal,
             preferred_level=lesson.module.course.preferred_level,
+            language=lesson.module.course.language or "english",
         )
         
         # Save generated content to database

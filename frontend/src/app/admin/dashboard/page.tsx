@@ -48,6 +48,10 @@ interface AdminInsights {
   token_usage_per_user: TokenUsageByUserStat[];
 }
 
+interface AdminTrialDaysResponse {
+  premium_trial_days: number;
+}
+
 const numberFormatter = new Intl.NumberFormat('en-US');
 
 export default function AdminDashboardPage() {
@@ -56,9 +60,13 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [insights, setInsights] = useState<AdminInsights | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [premiumTrialDays, setPremiumTrialDays] = useState<number>(1);
+  const [premiumTrialDaysDraft, setPremiumTrialDaysDraft] = useState<string>('1');
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isLoadingTrialDays, setIsLoadingTrialDays] = useState(false);
+  const [isSavingTrialDays, setIsSavingTrialDays] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -107,6 +115,42 @@ export default function AdminDashboardPage() {
     }
   }, [parseApiError]);
 
+  const fetchTrialDays = useCallback(async () => {
+    setIsLoadingTrialDays(true);
+    setError('');
+    try {
+      const { data } = await api.get<AdminTrialDaysResponse>('/api/admin/settings/trial-days');
+      setPremiumTrialDays(data.premium_trial_days);
+      setPremiumTrialDaysDraft(String(data.premium_trial_days));
+    } catch (err: unknown) {
+      setError(parseApiError(err, 'Failed to load trial days setting.'));
+    } finally {
+      setIsLoadingTrialDays(false);
+    }
+  }, [parseApiError]);
+
+  const handleSaveTrialDays = useCallback(async () => {
+    const parsed = Number.parseInt(premiumTrialDaysDraft, 10);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 365) {
+      setError('Trial days must be between 0 and 365.');
+      return;
+    }
+
+    setIsSavingTrialDays(true);
+    setError('');
+    try {
+      const { data } = await api.put<AdminTrialDaysResponse>('/api/admin/settings/trial-days', {
+        premium_trial_days: parsed,
+      });
+      setPremiumTrialDays(data.premium_trial_days);
+      setPremiumTrialDaysDraft(String(data.premium_trial_days));
+    } catch (err: unknown) {
+      setError(parseApiError(err, 'Failed to update trial days setting.'));
+    } finally {
+      setIsSavingTrialDays(false);
+    }
+  }, [premiumTrialDaysDraft, parseApiError]);
+
   const handleUserPlanChange = useCallback(async (targetUser: AdminUser, planType: 'free' | 'premium') => {
     if (targetUser.is_admin || targetUser.plan_type === planType) {
       return;
@@ -154,8 +198,9 @@ export default function AdminDashboardPage() {
       fetchStats();
       fetchInsights();
       fetchUsers();
+      fetchTrialDays();
     }
-  }, [loading, user, router, fetchStats, fetchInsights, fetchUsers]);
+  }, [loading, user, router, fetchStats, fetchInsights, fetchUsers, fetchTrialDays]);
 
   if (loading || !user || (user.is_admin && !stats && isLoadingStats)) {
     return (
@@ -199,11 +244,12 @@ export default function AdminDashboardPage() {
                 fetchStats();
                 fetchInsights();
                 fetchUsers();
+                fetchTrialDays();
               }}
-              disabled={isLoadingStats || isLoadingInsights || isLoadingUsers}
+              disabled={isLoadingStats || isLoadingInsights || isLoadingUsers || isLoadingTrialDays}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-700 bg-gray-900 hover:bg-gray-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCw className={`w-4 h-4 ${(isLoadingStats || isLoadingInsights || isLoadingUsers) ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${(isLoadingStats || isLoadingInsights || isLoadingUsers || isLoadingTrialDays) ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
@@ -243,6 +289,38 @@ export default function AdminDashboardPage() {
         </div>
 
         <section className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-6">
+            <h2 className="text-xl font-semibold mb-4">Premium Trial Days</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Controls how many premium trial days new users receive at registration.
+            </p>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-400 mb-2">Days (0-365)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={premiumTrialDaysDraft}
+                  onChange={(e) => setPremiumTrialDaysDraft(e.target.value)}
+                  disabled={isLoadingTrialDays || isSavingTrialDays}
+                  className="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <button
+                onClick={handleSaveTrialDays}
+                disabled={isLoadingTrialDays || isSavingTrialDays}
+                className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              >
+                {isSavingTrialDays && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              Current value: {premiumTrialDays} day(s)
+            </p>
+          </div>
+
           <div className="rounded-2xl border border-gray-800 bg-gray-900 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">Date-wise Registrations (14 days)</h2>

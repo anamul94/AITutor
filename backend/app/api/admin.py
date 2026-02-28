@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin, get_db
 from app.core.config import settings
+from app.core.runtime_settings import get_premium_trial_days, set_premium_trial_days
 from app.core.security import get_password_hash
 from app.models.course import Course, LLMUsageEvent, Lesson
 from app.models.user import User
@@ -13,6 +14,8 @@ from app.schemas.user import (
     AdminInsightsResponse,
     AdminRegisterRequest,
     AdminStatsResponse,
+    AdminTrialDaysResponse,
+    AdminTrialDaysUpdateRequest,
     AdminUserPlanUpdateRequest,
     AdminUserStatusUpdateRequest,
     DailyRegistrationStat,
@@ -261,3 +264,22 @@ async def get_admin_insights(
         today_registered_users=today_registered_users,
         token_usage_per_user=token_usage_per_user,
     )
+
+
+@router.get("/settings/trial-days", response_model=AdminTrialDaysResponse)
+async def get_trial_days_setting(
+    db: AsyncSession = Depends(get_db),
+    _current_admin: User = Depends(get_current_admin),
+):
+    premium_trial_days = await get_premium_trial_days(db)
+    return AdminTrialDaysResponse(premium_trial_days=premium_trial_days)
+
+
+@router.put("/settings/trial-days", response_model=AdminTrialDaysResponse)
+async def update_trial_days_setting(
+    payload: AdminTrialDaysUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_admin: User = Depends(get_current_admin),
+):
+    premium_trial_days = await set_premium_trial_days(db, payload.premium_trial_days)
+    return AdminTrialDaysResponse(premium_trial_days=premium_trial_days)

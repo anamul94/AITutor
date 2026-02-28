@@ -20,6 +20,9 @@ class AdminUserPlanUpdateRequest(BaseModel):
 class AdminUserStatusUpdateRequest(BaseModel):
     is_active: bool
 
+class AdminTrialDaysUpdateRequest(BaseModel):
+    premium_trial_days: int = Field(ge=0, le=365)
+
 class UserResponse(UserBase):
     id: int
     is_active: bool
@@ -66,3 +69,7 @@ class AdminInsightsResponse(BaseModel):
     daily_registrations: list[DailyRegistrationStat]
     today_registered_users: list[UserResponse]
     token_usage_per_user: list[TokenUsageByUserStat]
+
+
+class AdminTrialDaysResponse(BaseModel):
+    premium_trial_days: int
