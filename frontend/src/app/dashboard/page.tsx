@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, BookOpen, Clock, Activity, Settings, User as UserIcon, Plus, X, Sparkles, Loader2, Trash2 } from 'lucide-react';
@@ -125,12 +126,7 @@ export default function DashboardPage() {
       {/* Sidebar / Navigation */}
       <div className="fixed top-0 left-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6 hidden md:block z-10">
         <div className="flex items-center gap-3 mb-12">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <BookOpen className="w-6 h-6 text-white" />
-          </div>
-          <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-            AITutor
-          </h2>
+          <Image src="/logo.png" alt="AITutor" width={140} height={40} className="object-contain" />
         </div>
 
         <nav className="space-y-2">
