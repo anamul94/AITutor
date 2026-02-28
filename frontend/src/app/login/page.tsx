@@ -126,12 +126,6 @@ export default function LoginPage() {
               Sign up
             </Link>
           </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Admin setup?{' '}
-            <Link href="/admin/register" className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
-              Register admin
-            </Link>
-          </p>
         </div>
       </motion.div>
     </div>

@@ -29,26 +29,26 @@ def get_day_window_utc() -> tuple[datetime, datetime]:
     return start_of_day, end_of_day
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register_admin(admin_in: AdminRegisterRequest, db: AsyncSession = Depends(get_db)):
-    if admin_in.admin_key != settings.ADMIN_REGISTRATION_KEY:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin registration key")
-
-    existing = await db.execute(select(User).where(User.email == admin_in.email))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already registered")
-
-    admin_user = User(
-        email=admin_in.email,
-        hashed_password=get_password_hash(admin_in.password),
-        is_admin=True,
-        plan_type="premium",
-        trial_expires_at=None,
-    )
-    db.add(admin_user)
-    await db.commit()
-    await db.refresh(admin_user)
-    return admin_user
+# @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+# async def register_admin(admin_in: AdminRegisterRequest, db: AsyncSession = Depends(get_db)):
+#     if admin_in.admin_key != settings.ADMIN_REGISTRATION_KEY:
+#         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin registration key")
+#
+#     existing = await db.execute(select(User).where(User.email == admin_in.email))
+#     if existing.scalar_one_or_none():
+#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already registered")
+#
+#     admin_user = User(
+#         email=admin_in.email,
+#         hashed_password=get_password_hash(admin_in.password),
+#         is_admin=True,
+#         plan_type="premium",
+#         trial_expires_at=None,
+#     )
+#     db.add(admin_user)
+#     await db.commit()
+#     await db.refresh(admin_user)
+#     return admin_user
 
 
 @router.get("/stats", response_model=AdminStatsResponse)
