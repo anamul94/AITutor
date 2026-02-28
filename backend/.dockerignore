@@ -6,5 +6,11 @@ __pycache__
 venv
 ENV
 
+# Never bake secrets into the image — injected at runtime via docker-compose env_file
+.env
+.env.*
+
 .git
 .gitignore
+README.md
+Dockerfile

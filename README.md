@@ -86,10 +86,11 @@ This starts PostgreSQL on `localhost:5430`.
 cd backend
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
+cp .env.example .env
 ./venv/bin/alembic upgrade head
 ```
 
-Create `backend/.env`:
+Edit `backend/.env`:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5430/aitutordb
@@ -120,9 +121,10 @@ Backend base URL: `http://localhost:8000`
 ```bash
 cd ../frontend
 npm install
+cp .env.example .env.local
 ```
 
-Create `frontend/.env.local`:
+Edit `frontend/.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
