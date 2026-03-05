@@ -29,8 +29,15 @@ interface LessonContent {
   course_id: number;
   title: string;
   content: string;
-  quiz_data: LessonQuizQuestion[];
+  quiz_data?: LessonQuizQuestion[];
   progress?: LessonProgressRow[];
+}
+
+interface LessonQuizResponse {
+  lesson_id: number;
+  module_id: number;
+  course_id: number;
+  quiz_data: LessonQuizQuestion[];
 }
 
 interface CourseLesson {
@@ -55,8 +62,10 @@ export default function LessonPage() {
   const [lesson, setLesson] = useState<LessonContent | null>(null);
   const [nextLessonId, setNextLessonId] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(true);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [error, setError] = useState('');
+  const [quizError, setQuizError] = useState('');
 
   // Quiz State
   const [quizScore, setQuizScore] = useState<number | null>(null);
@@ -78,8 +87,10 @@ export default function LessonPage() {
       setSelectedAnswers({});
       setShowResults(false);
       setQuizScore(null);
+      setQuizError('');
+      setIsGeneratingQuiz(false);
 
-      // This endpoint triggers Bedrock to generate the content JIT if it doesn't exist
+      // This endpoint generates lesson content JIT if it doesn't exist
       const { data } = await api.get<LessonContent>(`/api/courses/lessons/${id}`);
       setLesson(data);
 
@@ -133,6 +144,26 @@ export default function LessonPage() {
 
   const [isCompleted, setIsCompleted] = useState(false);
 
+  const handleGenerateQuiz = useCallback(async () => {
+    if (!lesson) return;
+    setIsGeneratingQuiz(true);
+    setQuizError('');
+    setSelectedAnswers({});
+    setShowResults(false);
+    setQuizScore(null);
+
+    try {
+      const quizRes = await api.get<LessonQuizResponse>(`/api/courses/lessons/${lesson.id}/quiz`);
+      setLesson((prevLesson) => (
+        prevLesson ? { ...prevLesson, quiz_data: quizRes.data.quiz_data } : prevLesson
+      ));
+    } catch (quizErr: unknown) {
+      setQuizError(parseApiError(quizErr, 'Failed to generate quiz.'));
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  }, [lesson, parseApiError]);
+
   const handleCompleteLesson = async () => {
     if (!lesson) return;
 
@@ -158,7 +189,7 @@ export default function LessonPage() {
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-6" />
         <h2 className="text-2xl font-bold mb-2">Generating Lesson...</h2>
         <p className="text-gray-400 max-w-sm text-center">
-          Our AI Tutor is currently crafting custom curriculum, examples, and a quiz just for you.
+          Our AI Tutor is currently crafting custom curriculum and examples for you.
         </p>
       </div>
     );
@@ -228,7 +259,45 @@ export default function LessonPage() {
         </article>
 
         {/* AI Generated Interactive Quiz */}
-        {lesson.quiz_data && lesson.quiz_data.length > 0 && (
+        {isGeneratingQuiz && (
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8 mb-16">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+              <p className="text-gray-300">Generating quiz questions for this lesson...</p>
+            </div>
+          </div>
+        )}
+
+        {(!lesson.quiz_data || lesson.quiz_data.length === 0) && !isGeneratingQuiz && !quizError && (
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8 mb-16">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Knowledge Check</h3>
+                <p className="text-gray-400 text-sm">No quiz generated yet for this lesson.</p>
+              </div>
+              <button
+                onClick={handleGenerateQuiz}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-semibold transition-colors"
+              >
+                Generate Quiz (5-10)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {quizError && !isGeneratingQuiz && (
+          <div className="bg-red-900/20 rounded-2xl border border-red-700/40 p-6 mb-16">
+            <p className="text-red-300 mb-3">{quizError}</p>
+            <button
+              onClick={handleGenerateQuiz}
+              className="px-4 py-2 rounded-lg bg-red-600/30 hover:bg-red-600/40 border border-red-500/40 text-red-100 text-sm"
+            >
+              Retry Quiz Generation
+            </button>
+          </div>
+        )}
+
+        {lesson.quiz_data && lesson.quiz_data.length > 0 && !isGeneratingQuiz && (
           <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8 mb-16">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">

@@ -87,4 +87,6 @@ class LLMUsageEvent(Base):
     input_tokens = Column(Integer, nullable=False, default=0)
     output_tokens = Column(Integer, nullable=False, default=0)
     total_tokens = Column(Integer, nullable=False, default=0)
+    model_name = Column(String(255), nullable=True)
+    model_provider = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

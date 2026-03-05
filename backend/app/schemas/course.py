@@ -22,13 +22,16 @@ class GeneratedCourseSchema(BaseModel):
 
 class QuizQuestionSchema(BaseModel):
     question: str = Field(description="The quiz question text")
-    options: List[str] = Field(description="A list of 4 possible answers")
+    options: List[str] = Field(description="A list of 4 possible answers", min_length=4, max_length=4)
     correct_answer_index: int = Field(description="The index (0-3) of the correct answer in the options list")
     explanation: str = Field(description="Explanation of why the answer is correct")
 
-class GeneratedLessonContentSchema(BaseModel):
-    content_markdown: str = Field(description="The educational content of the lesson written in Markdown format. Should be extensive, engaging, and easy to read. Include code blocks if relevant.")
-    quiz: List[QuizQuestionSchema] = Field(description="A short quiz of 3 questions to test the user's knowledge on this specific lesson content.")
+class GeneratedLessonQuizSchema(BaseModel):
+    quiz: List[QuizQuestionSchema] = Field(
+        description="A quiz of 5-10 multiple choice questions based on the lesson.",
+        min_length=5,
+        max_length=10,
+    )
 
 # --- API Request/Response Schemas ---
 
@@ -99,3 +102,10 @@ class LessonContentResponse(BaseModel):
     content: Optional[str]
     quiz_data: Optional[List[dict]]
     progress: Optional[List[UserProgressResponse]] = []
+
+
+class LessonQuizResponse(BaseModel):
+    lesson_id: int
+    module_id: int
+    course_id: int
+    quiz_data: List[QuizQuestionSchema]

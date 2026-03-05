@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Users, UserPlus, Activity, BookOpen, GraduationCap, Coins, RefreshCw, LogOut, Loader2 } from 'lucide-react';
+import { ShieldCheck, Users, UserPlus, Activity, BookOpen, GraduationCap, Coins, RefreshCw, LogOut, Loader2, BarChart3 } from 'lucide-react';
 import axios from 'axios';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -41,11 +41,23 @@ interface TokenUsageByUserStat {
   token_usage_today: number;
 }
 
+interface TokenUsageByModelStat {
+  model_provider: string;
+  model_name: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  input_tokens_today: number;
+  output_tokens_today: number;
+  total_tokens_today: number;
+}
+
 interface AdminInsights {
   lookback_days: number;
   daily_registrations: DailyRegistrationStat[];
   today_registered_users: AdminUser[];
   token_usage_per_user: TokenUsageByUserStat[];
+  token_usage_by_model: TokenUsageByModelStat[];
 }
 
 interface AdminTrialDaysResponse {
@@ -224,6 +236,8 @@ export default function AdminDashboardPage() {
     { label: 'Token Usage (Today)', value: numberFormatter.format(stats?.token_usage_today ?? 0), icon: <Coins className="w-5 h-5 text-orange-300" /> },
     { label: 'Token Usage (Total)', value: numberFormatter.format(stats?.total_token_usage ?? 0), icon: <Coins className="w-5 h-5 text-rose-300" /> },
   ];
+  const modelUsageRows = insights?.token_usage_by_model ?? [];
+  const maxModelTotalTokens = Math.max(...modelUsageRows.map((row) => row.total_tokens), 1);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6 md:p-10">
@@ -393,6 +407,54 @@ export default function AdminDashboardPage() {
           ) : (
             <p className="text-sm text-gray-400">No token usage data yet.</p>
           )}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-gray-800 bg-gray-900 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold inline-flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-cyan-300" />
+              Token Usage by Model (Input vs Output)
+            </h2>
+            {isLoadingInsights && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+          </div>
+          {modelUsageRows.length ? (
+            <div className="space-y-4">
+              {modelUsageRows.map((entry) => {
+                const totalBarWidth = Math.max(4, (entry.total_tokens / maxModelTotalTokens) * 100);
+                const inputShare = entry.total_tokens > 0 ? (entry.input_tokens / entry.total_tokens) * 100 : 0;
+                const outputShare = Math.max(0, 100 - inputShare);
+                const modelLabel = `${entry.model_provider} / ${entry.model_name}`;
+
+                return (
+                  <div key={modelLabel} className="rounded-xl border border-gray-800 bg-gray-950/40 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                      <p className="text-sm text-white font-medium break-all">{modelLabel}</p>
+                      <p className="text-xs text-gray-400">
+                        Today: {numberFormatter.format(entry.input_tokens_today)} in / {numberFormatter.format(entry.output_tokens_today)} out / {numberFormatter.format(entry.total_tokens_today)} total
+                      </p>
+                    </div>
+                    <div className="w-full h-3 rounded-full bg-gray-800 overflow-hidden">
+                      <div className="h-full flex" style={{ width: `${totalBarWidth}%` }}>
+                        <div className="h-full bg-cyan-500" style={{ width: `${inputShare}%` }} />
+                        <div className="h-full bg-orange-500" style={{ width: `${outputShare}%` }} />
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-300 flex flex-wrap gap-4">
+                      <span>Input: {numberFormatter.format(entry.input_tokens)}</span>
+                      <span>Output: {numberFormatter.format(entry.output_tokens)}</span>
+                      <span className="text-white">Total: {numberFormatter.format(entry.total_tokens)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No model-level token usage data yet.</p>
+          )}
+          <div className="mt-4 text-xs text-gray-500 flex items-center gap-4">
+            <span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Input tokens</span>
+            <span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Output tokens</span>
+          </div>
         </section>
 
         <section className="mt-8 rounded-2xl border border-gray-800 bg-gray-900 p-6">

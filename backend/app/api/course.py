@@ -8,8 +8,8 @@ from app.api.deps import get_db, get_current_user
 from app.core.config import settings
 from app.models.user import User
 from app.models.course import Course, LLMUsageEvent, Module, Lesson, UserProgress
-from app.schemas.course import CourseGenerateRequest, CourseResponse, LessonContentResponse, UserProgressResponse, UserProgressRequest
-from app.core.llm import generate_course_syllabus, generate_lesson_content
+from app.schemas.course import CourseGenerateRequest, CourseResponse, LessonContentResponse, LessonQuizResponse, UserProgressResponse, UserProgressRequest
+from app.agents import generate_course_syllabus, generate_lesson_content, generate_lesson_quiz
 
 router = APIRouter()
 
@@ -64,12 +64,14 @@ def log_llm_usage(
     db: AsyncSession,
     user_id: int,
     operation: str,
-    usage: dict[str, int] | None,
+    usage: dict[str, object] | None,
 ) -> None:
     usage = usage or {}
     input_tokens = int(usage.get("input_tokens", 0))
     output_tokens = int(usage.get("output_tokens", 0))
     total_tokens = int(usage.get("total_tokens", input_tokens + output_tokens))
+    model_name = usage.get("model_name")
+    model_provider = usage.get("model_provider")
     db.add(
         LLMUsageEvent(
             user_id=user_id,
@@ -77,6 +79,8 @@ def log_llm_usage(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=total_tokens,
+            model_name=str(model_name) if model_name else None,
+            model_provider=str(model_provider) if model_provider else None,
         )
     )
 
@@ -263,8 +267,8 @@ async def get_or_generate_lesson_content(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Fetch a lesson's content. If it hasn't been generated yet, use the LLM to write the content
-    and create a quiz, then save it and return it. JIT (Just-In-Time) Generation.
+    Fetch a lesson's content. If it hasn't been generated yet, use the LLM to write content
+    and save it. JIT (Just-In-Time) generation.
     """
     # Load lesson only if it belongs to the current user (prevents IDOR via lesson_id).
     result = await db.execute(
@@ -320,7 +324,7 @@ async def get_or_generate_lesson_content(
         if effective_plan == "free":
             await enforce_free_lesson_limit(db, current_user.id)
 
-        generated_data, usage = await generate_lesson_content(
+        generated_content, usage = await generate_lesson_content(
             course_title=lesson.module.course.title,
             module_title=lesson.module.title,
             lesson_title=lesson.title,
@@ -331,10 +335,8 @@ async def get_or_generate_lesson_content(
         )
         
         # Save generated content to database
-        lesson.content = generated_data.content_markdown
+        lesson.content = generated_content
         lesson.content_generated_at = datetime.now(timezone.utc)
-        # Quizzes come back as Pydantic objects, dump to dict to store in JSONB
-        lesson.quiz_data = [q.model_dump() for q in generated_data.quiz]
         log_llm_usage(db, current_user.id, "lesson_content", usage)
 
         await db.commit()
@@ -348,6 +350,83 @@ async def get_or_generate_lesson_content(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"LLM Generation failed: {repr(e)}")
+
+
+@router.get("/lessons/{lesson_id}/quiz", response_model=LessonQuizResponse)
+async def get_or_generate_lesson_quiz(
+    lesson_id: int = Path(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Fetch quiz for a lesson. If it doesn't exist, generate 5-10 quiz questions based on lesson content.
+    """
+    result = await db.execute(
+        select(Lesson)
+        .options(
+            selectinload(Lesson.module).selectinload(Module.course),
+        )
+        .join(Module, Lesson.module_id == Module.id)
+        .join(Course, Module.course_id == Course.id)
+        .where(Lesson.id == lesson_id)
+        .where(Course.created_by == current_user.id)
+    )
+    lesson = result.scalar_one_or_none()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    if not lesson.content:
+        raise HTTPException(
+            status_code=400,
+            detail="Lesson content is not generated yet. Generate lesson content first.",
+        )
+
+    # Lock lesson row to prevent concurrent duplicate quiz generation/token logging.
+    locked_lesson_result = await db.execute(
+        select(Lesson)
+        .options(selectinload(Lesson.module).selectinload(Module.course))
+        .where(Lesson.id == lesson.id)
+        .with_for_update()
+    )
+    lesson = locked_lesson_result.scalar_one()
+
+    if lesson.quiz_data:
+        return {
+            "lesson_id": lesson.id,
+            "module_id": lesson.module_id,
+            "course_id": lesson.module.course_id,
+            "quiz_data": lesson.quiz_data,
+        }
+
+    try:
+        generated_quiz, usage = await generate_lesson_quiz(
+            course_title=lesson.module.course.title,
+            module_title=lesson.module.title,
+            lesson_title=lesson.title,
+            lesson_content=lesson.content,
+            lesson_description=lesson.description,
+            learning_goal=lesson.module.course.learning_goal,
+            preferred_level=lesson.module.course.preferred_level,
+            language=lesson.module.course.language or "english",
+        )
+
+        lesson.quiz_data = [q.model_dump() for q in generated_quiz.quiz]
+        log_llm_usage(db, current_user.id, "lesson_quiz", usage)
+        await db.commit()
+        await db.refresh(lesson)
+
+        return {
+            "lesson_id": lesson.id,
+            "module_id": lesson.module_id,
+            "course_id": lesson.module.course_id,
+            "quiz_data": lesson.quiz_data or [],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Quiz generation failed: {repr(e)}")
 
 @router.get("/{course_id}/progress", response_model=list[UserProgressResponse])
 async def get_course_progress(

@@ -64,11 +64,23 @@ class TokenUsageByUserStat(BaseModel):
     token_usage_today: int
 
 
+class TokenUsageByModelStat(BaseModel):
+    model_provider: str
+    model_name: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    input_tokens_today: int
+    output_tokens_today: int
+    total_tokens_today: int
+
+
 class AdminInsightsResponse(BaseModel):
     lookback_days: int = Field(ge=1, le=90)
     daily_registrations: list[DailyRegistrationStat]
     today_registered_users: list[UserResponse]
     token_usage_per_user: list[TokenUsageByUserStat]
+    token_usage_by_model: list[TokenUsageByModelStat]
 
 
 class AdminTrialDaysResponse(BaseModel):

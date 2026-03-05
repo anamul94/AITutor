@@ -1,7 +1,7 @@
-import inspect
 import unittest
 
 from app.core import llm
+from app.agents import course_agent
 
 
 class SyllabusPromptInputTests(unittest.TestCase):
@@ -21,10 +21,12 @@ class SyllabusPromptInputTests(unittest.TestCase):
         self.assertEqual(result["learning_goal_context"], "Not provided")
 
     def test_syllabus_prompt_mentions_context(self) -> None:
-        source = inspect.getsource(llm.generate_course_syllabus)
-        self.assertIn("Preferred Level", source)
-        self.assertIn("Learning Goal", source)
-        self.assertIn("lesson MUST include a 1-3 sentence description", source)
+        self.assertIn("Preferred Level", course_agent.COURSE_USER_PROMPT)
+        self.assertIn("Learning Goal", course_agent.COURSE_USER_PROMPT)
+        self.assertIn(
+            "lesson MUST include a 1-3 sentence description",
+            course_agent.COURSE_SYSTEM_PROMPT,
+        )
 
 
 if __name__ == "__main__":

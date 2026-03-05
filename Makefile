@@ -1,62 +1,111 @@
-.PHONY: help install db-up db-down backend frontend all migrate makemigration docker-up docker-down docker-build
+SHELL := /bin/bash
+
+BACKEND_DIR := backend
+FRONTEND_DIR := frontend
+VENV_DIR := $(BACKEND_DIR)/venv
+VENV_PY := $(VENV_DIR)/bin/python
+VENV_PIP := $(VENV_DIR)/bin/pip
+ALEMBIC := $(VENV_DIR)/bin/alembic
+
+.PHONY: help venv install install-backend install-frontend \
+	db-up db-down db-logs backend frontend \
+	migrate migrate-local migrate-docker \
+	makemigration makemigration-local makemigration-docker \
+	docker-build docker-up docker-down
 
 help:
 	@echo "Available commands:"
-	@echo "  make install         - Install backend and frontend dependencies (local dev)"
-	@echo "  make db-up           - Start the PostgreSQL database only (Docker)"
-	@echo "  make db-down         - Stop all Docker services"
-	@echo "  make backend         - Start the FastAPI backend server (local dev, requires venv)"
-	@echo "  make frontend        - Start the Next.js frontend server (local dev)"
-	@echo "  make migrate         - Run Alembic migrations inside the backend Docker container"
-	@echo "  make makemigration   - Auto-generate a migration inside the backend Docker container"
-	@echo "  make docker-build    - Build all Docker images"
-	@echo "  make docker-up       - Build and start all services (db + backend + frontend)"
-	@echo "  make docker-down     - Stop and remove all Docker services"
+	@echo "  make install                      - Install backend and frontend dependencies (local dev)"
+	@echo "  make db-up                        - Start PostgreSQL container"
+	@echo "  make db-down                      - Stop PostgreSQL container only"
+	@echo "  make db-logs                      - Tail PostgreSQL logs"
+	@echo "  make backend                      - Start FastAPI backend locally"
+	@echo "  make frontend                     - Start Next.js frontend locally"
+	@echo "  make migrate                      - Run Alembic migration (local venv if present, else Docker)"
+	@echo "  make makemigration msg=\"...\"      - Create autogen migration (local venv if present, else Docker)"
+	@echo "  make docker-build                 - Build all Docker images"
+	@echo "  make docker-up                    - Build and start all Docker services"
+	@echo "  make docker-down                  - Stop and remove all Docker services"
 
-# Install dependencies for both frontend and backend (local dev only)
-install:
-	@echo "Installing Backend Dependencies..."
-	cd backend && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
-	@echo "Installing Frontend Dependencies..."
-	cd frontend && npm install
+venv:
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "Creating Python virtualenv in $(VENV_DIR)..."; \
+		python3 -m venv "$(VENV_DIR)"; \
+	fi
 
-# Start database only
+install-backend: venv
+	@echo "Installing backend dependencies..."
+	$(VENV_PIP) install --upgrade pip
+	$(VENV_PIP) install -r $(BACKEND_DIR)/requirements.txt
+
+install-frontend:
+	@echo "Installing frontend dependencies..."
+	cd $(FRONTEND_DIR) && npm install
+
+install: install-backend install-frontend
+
+# Database
 db-up:
 	docker compose up -d db
 
-# Stop all services
 db-down:
-	docker compose down
+	docker compose stop db
 
-# Start FastAPI backend (local dev)
-backend:
-	@echo "Starting FastAPI Backend..."
-	cd backend && ./venv/bin/uvicorn app.main:app --reload
+db-logs:
+	docker compose logs -f db
 
-# Start Next.js frontend (local dev)
+# Local app runners
+backend: venv
+	@echo "Starting FastAPI backend..."
+	cd $(BACKEND_DIR) && ./venv/bin/uvicorn app.main:app --reload
+
 frontend:
-	@echo "Starting Next.js Frontend..."
-	cd frontend && npm run dev
+	@echo "Starting Next.js frontend..."
+	cd $(FRONTEND_DIR) && npm run dev
 
-# Run Alembic migrations inside the running backend container
+# Migrations
 migrate:
-	@echo "Running Database Migrations inside container..."
-	docker compose exec backend alembic upgrade head
+	@if [ -x "$(ALEMBIC)" ]; then \
+		$(MAKE) migrate-local; \
+	else \
+		$(MAKE) migrate-docker; \
+	fi
 
-# Auto-generate a new migration inside the running backend container
-# Usage: make makemigration msg="your migration message"
+migrate-local: venv
+	@echo "Running Alembic migration locally..."
+	cd $(BACKEND_DIR) && ./venv/bin/alembic upgrade head
+
+migrate-docker:
+	@echo "Running Alembic migration via Docker..."
+	docker compose up -d db
+	docker compose run --rm backend alembic upgrade head
+
 makemigration:
-	@echo "Creating migration inside container..."
-	docker compose exec backend alembic revision --autogenerate -m "$(msg)"
+	@if [ -z "$(msg)" ]; then \
+		echo "Usage: make makemigration msg=\"your migration message\""; \
+		exit 1; \
+	fi
+	@if [ -x "$(ALEMBIC)" ]; then \
+		$(MAKE) makemigration-local msg="$(msg)"; \
+	else \
+		$(MAKE) makemigration-docker msg="$(msg)"; \
+	fi
 
-# Build all Docker images
+makemigration-local: venv
+	@echo "Creating migration locally..."
+	cd $(BACKEND_DIR) && ./venv/bin/alembic revision --autogenerate -m "$(msg)"
+
+makemigration-docker:
+	@echo "Creating migration via Docker..."
+	docker compose up -d db
+	docker compose run --rm backend alembic revision --autogenerate -m "$(msg)"
+
+# Docker workflow
 docker-build:
 	docker compose build
 
-# Build and start all Docker services
 docker-up:
 	docker compose up --build -d
 
-# Stop and remove all Docker services
 docker-down:
 	docker compose down

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_admin, get_db
@@ -19,6 +19,7 @@ from app.schemas.user import (
     AdminUserPlanUpdateRequest,
     AdminUserStatusUpdateRequest,
     DailyRegistrationStat,
+    TokenUsageByModelStat,
     TokenUsageByUserStat,
     UserResponse,
 )
@@ -32,26 +33,26 @@ def get_day_window_utc() -> tuple[datetime, datetime]:
     return start_of_day, end_of_day
 
 
-# @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-# async def register_admin(admin_in: AdminRegisterRequest, db: AsyncSession = Depends(get_db)):
-#     if admin_in.admin_key != settings.ADMIN_REGISTRATION_KEY:
-#         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin registration key")
-#
-#     existing = await db.execute(select(User).where(User.email == admin_in.email))
-#     if existing.scalar_one_or_none():
-#         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already registered")
-#
-#     admin_user = User(
-#         email=admin_in.email,
-#         hashed_password=get_password_hash(admin_in.password),
-#         is_admin=True,
-#         plan_type="premium",
-#         trial_expires_at=None,
-#     )
-#     db.add(admin_user)
-#     await db.commit()
-#     await db.refresh(admin_user)
-#     return admin_user
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_admin(admin_in: AdminRegisterRequest, db: AsyncSession = Depends(get_db)):
+    if admin_in.admin_key != settings.ADMIN_REGISTRATION_KEY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin registration key")
+
+    existing = await db.execute(select(User).where(User.email == admin_in.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already registered")
+
+    admin_user = User(
+        email=admin_in.email,
+        hashed_password=get_password_hash(admin_in.password),
+        is_admin=True,
+        plan_type="premium",
+        trial_expires_at=None,
+    )
+    db.add(admin_user)
+    await db.commit()
+    await db.refresh(admin_user)
+    return admin_user
 
 
 @router.get("/stats", response_model=AdminStatsResponse)
@@ -258,11 +259,96 @@ async def get_admin_insights(
         for user_id, email, total_tokens, token_usage_today in token_usage_result.all()
     ]
 
+    today_input_usage_sum = func.coalesce(
+        func.sum(
+            case(
+                (
+                    and_(
+                        LLMUsageEvent.created_at >= start_of_day,
+                        LLMUsageEvent.created_at < end_of_day,
+                    ),
+                    LLMUsageEvent.input_tokens,
+                ),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    today_output_usage_sum = func.coalesce(
+        func.sum(
+            case(
+                (
+                    and_(
+                        LLMUsageEvent.created_at >= start_of_day,
+                        LLMUsageEvent.created_at < end_of_day,
+                    ),
+                    LLMUsageEvent.output_tokens,
+                ),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    today_total_usage_sum = func.coalesce(
+        func.sum(
+            case(
+                (
+                    and_(
+                        LLMUsageEvent.created_at >= start_of_day,
+                        LLMUsageEvent.created_at < end_of_day,
+                    ),
+                    LLMUsageEvent.total_tokens,
+                ),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    model_provider_label = func.coalesce(LLMUsageEvent.model_provider, literal("unknown")).label("model_provider")
+    model_name_label = func.coalesce(LLMUsageEvent.model_name, literal("unknown")).label("model_name")
+    token_usage_by_model_result = await db.execute(
+        select(
+            model_provider_label,
+            model_name_label,
+            func.coalesce(func.sum(LLMUsageEvent.input_tokens), 0).label("input_tokens"),
+            func.coalesce(func.sum(LLMUsageEvent.output_tokens), 0).label("output_tokens"),
+            func.coalesce(func.sum(LLMUsageEvent.total_tokens), 0).label("total_tokens"),
+            today_input_usage_sum.label("input_tokens_today"),
+            today_output_usage_sum.label("output_tokens_today"),
+            today_total_usage_sum.label("total_tokens_today"),
+        )
+        .group_by(model_provider_label, model_name_label)
+        .order_by(func.coalesce(func.sum(LLMUsageEvent.total_tokens), 0).desc(), model_provider_label.asc(), model_name_label.asc())
+    )
+    token_usage_by_model = [
+        TokenUsageByModelStat(
+            model_provider=str(model_provider or "unknown"),
+            model_name=str(model_name or "unknown"),
+            input_tokens=int(input_tokens or 0),
+            output_tokens=int(output_tokens or 0),
+            total_tokens=int(total_tokens or 0),
+            input_tokens_today=int(input_tokens_today or 0),
+            output_tokens_today=int(output_tokens_today or 0),
+            total_tokens_today=int(total_tokens_today or 0),
+        )
+        for (
+            model_provider,
+            model_name,
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            input_tokens_today,
+            output_tokens_today,
+            total_tokens_today,
+        ) in token_usage_by_model_result.all()
+    ]
+
     return AdminInsightsResponse(
         lookback_days=days,
         daily_registrations=daily_registrations,
         today_registered_users=today_registered_users,
         token_usage_per_user=token_usage_per_user,
+        token_usage_by_model=token_usage_by_model,
     )
 
 
