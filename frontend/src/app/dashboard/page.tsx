@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, BookOpen, Clock, Activity, Settings, User as UserIcon, Plus, X, Sparkles, Loader2, Trash2 } from 'lucide-react';
+import { LogOut, BookOpen, Clock, Activity, Settings, User as UserIcon, Plus, X, Sparkles, Loader2, Trash2, Code2, BrainCircuit } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
@@ -134,8 +134,10 @@ export default function DashboardPage() {
         </div>
 
         <nav className="space-y-2">
-          <NavItem icon={<Activity />} label="Dashboard" active />
+          <NavItem icon={<Activity />} label="Dashboard" active onClick={() => router.push('/dashboard')} />
           <NavItem icon={<BookOpen />} label="Courses" />
+          <NavItem icon={<BrainCircuit />} label="DSA Learn" onClick={() => router.push('/dsa-learn')} />
+          <NavItem icon={<Code2 />} label="DSA Solve" onClick={() => router.push('/dsa-solve')} />
           <NavItem icon={<Clock />} label="History" />
           <NavItem icon={<Settings />} label="Settings" />
         </nav>
@@ -408,12 +410,26 @@ export default function DashboardPage() {
   );
 }
 
-function NavItem({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) {
+function NavItem({
+  icon,
+  label,
+  active = false,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <a href="#" className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-blue-600/10 text-blue-500 font-medium' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-blue-600/10 text-blue-500 font-medium' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+    >
       {icon}
       <span>{label}</span>
-    </a>
+    </button>
   );
 }
 

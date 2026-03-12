@@ -46,6 +46,14 @@ def extract_json_object_text(raw_text: str) -> str:
 
 
 def parse_pydantic_from_response(response: Any, schema: type[TModel]) -> TModel:
+    # Bedrock with_structured_output uses tool-calling: content is '' but
+    # the schema args live in tool_calls[0]["args"] as a plain dict.
+    tool_calls = getattr(response, "tool_calls", None)
+    if tool_calls and isinstance(tool_calls, list):
+        args = tool_calls[0].get("args") if tool_calls else None
+        if isinstance(args, dict):
+            return schema.model_validate(args)
+
     content = response_content_to_text(getattr(response, "content", response))
     json_text = extract_json_object_text(content)
     return schema.model_validate_json(json_text)

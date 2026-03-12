@@ -23,6 +23,7 @@ if config.config_file_name is not None:
 from app.models.user import Base
 import app.models.course  # Import the new models so Alembic metadata picks them up 
 import app.models.settings  # Import app settings model for metadata
+import app.models.dsa_coach  # Import DSA coaching models for metadata
 from app.core.config import settings
 
 # add your model's MetaData object here

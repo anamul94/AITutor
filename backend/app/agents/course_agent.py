@@ -62,19 +62,19 @@ Output format requirements:
 - Do NOT use markdown code fences.
 - Do NOT add any text before or after the JSON.
 - JSON shape:
-  {
+  {{
     "title": "string",
     "description": "string",
     "modules": [
-      {
+      {{
         "title": "string",
         "order_index": 1,
         "lessons": [
-          {"title": "string", "description": "string", "order_index": 1}
+          {{"title": "string", "description": "string", "order_index": 1}}
         ]
-      }
+      }}
     ]
-  }
+  }}
 """
 
 
