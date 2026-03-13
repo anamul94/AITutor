@@ -11,10 +11,12 @@ ALEMBIC := $(VENV_DIR)/bin/alembic
 	db-up db-down db-logs backend frontend \
 	migrate migrate-local migrate-docker \
 	makemigration makemigration-local makemigration-docker \
-	docker-build docker-up docker-down
+	docker-build docker-up docker-down \
+	setup
 
 help:
 	@echo "Available commands:"
+	@echo "  make setup                        - Full first-time setup: env, deps, DB, migrations"
 	@echo "  make install                      - Install backend and frontend dependencies (local dev)"
 	@echo "  make db-up                        - Start PostgreSQL container"
 	@echo "  make db-down                      - Stop PostgreSQL container only"
@@ -109,3 +111,55 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+# ── Full first-time setup ─────────────────────────────────────────────────────
+setup:
+	@echo ""
+	@echo "==> [1/5] Copying env files (skipped if already present)..."
+	@if [ ! -f "$(BACKEND_DIR)/.env" ]; then \
+		cp "$(BACKEND_DIR)/.env.example" "$(BACKEND_DIR)/.env"; \
+		echo "     Created backend/.env from .env.example — fill in your secrets before starting."; \
+	else \
+		echo "     backend/.env already exists, skipping."; \
+	fi
+	@if [ ! -f "$(FRONTEND_DIR)/.env.local" ]; then \
+		cp "$(FRONTEND_DIR)/.env.example" "$(FRONTEND_DIR)/.env.local"; \
+		echo "     Created frontend/.env.local from .env.example"; \
+	else \
+		echo "     frontend/.env.local already exists, skipping."; \
+	fi
+
+	@echo ""
+	@echo "==> [2/5] Installing backend dependencies..."
+	$(MAKE) install-backend
+
+	@echo ""
+	@echo "==> [3/5] Installing frontend dependencies..."
+	$(MAKE) install-frontend
+
+	@echo ""
+	@echo "==> [4/5] Starting PostgreSQL..."
+	$(MAKE) db-up
+	@echo "     Waiting for PostgreSQL to be ready..."
+	@for i in $$(seq 1 20); do \
+		docker compose exec db pg_isready -q 2>/dev/null && break; \
+		echo "     ...still waiting ($$i/20)"; \
+		sleep 2; \
+	done
+	@docker compose exec db pg_isready -q || (echo "ERROR: PostgreSQL did not become ready in time." && exit 1)
+
+	@echo ""
+	@echo "==> [5/5] Running database migrations..."
+	$(MAKE) migrate-local
+
+	@echo ""
+	@echo "================================================================"
+	@echo "  Setup complete! Run the app:"
+	@echo ""
+	@echo "    make backend    (in one terminal)  — FastAPI on :8000"
+	@echo "    make frontend   (in another terminal) — Next.js on :3000"
+	@echo ""
+	@echo "  Or run everything in Docker:"
+	@echo "    make docker-up"
+	@echo "================================================================"
+	@echo ""
