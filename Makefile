@@ -16,7 +16,7 @@ ALEMBIC := $(VENV_DIR)/bin/alembic
 
 help:
 	@echo "Available commands:"
-	@echo "  make setup                        - Full first-time setup: env, deps, DB, migrations"
+	@echo "  make setup                        - Full first-time local setup: env, deps, Postgres container, migrations"
 	@echo "  make install                      - Install backend and frontend dependencies (local dev)"
 	@echo "  make db-up                        - Start PostgreSQL container"
 	@echo "  make db-down                      - Stop PostgreSQL container only"

@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AITutor API"
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5430/aitutordb"
+    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5431/aitutordb"
     SECRET_KEY: str = "super_secret_key_change_in_production"
     ADMIN_REGISTRATION_KEY: str = "change_this_admin_registration_key"
     ALGORITHM: str = "HS256"

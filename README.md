@@ -79,7 +79,7 @@ AITutor/
 docker compose up -d
 ```
 
-This starts PostgreSQL on `localhost:5430`.
+This starts PostgreSQL on `localhost:5431`.
 
 ### 3) Backend setup
 
@@ -94,7 +94,7 @@ cp .env.example .env
 Edit `backend/.env`:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5430/aitutordb
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5431/aitutordb
 SECRET_KEY=replace_with_strong_secret
 ADMIN_REGISTRATION_KEY=replace_with_strong_admin_key
 ACCESS_TOKEN_EXPIRE_MINUTES=10080

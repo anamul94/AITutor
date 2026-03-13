@@ -16,7 +16,7 @@ _checkpointer: Any = None
 
 def _make_psycopg_conn_string() -> str:
     """Convert SQLAlchemy DATABASE_URL to a plain psycopg connection string."""
-    url = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5430/aitutordb")
+    url = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5431/aitutordb")
     return (
         url.replace("postgresql+asyncpg://", "postgresql://")
         .replace("postgresql+psycopg://", "postgresql://")
