@@ -226,11 +226,13 @@ async def create_dsa_coaching_session(
             DEFAULT_SOLVE_WITH_CODE_OPENING if has_attempt else DEFAULT_SOLVE_OPENING
         )
 
-    effective_problem_statement = request.problem_statement
     if request.coaching_mode == "learn_topic":
-        effective_problem_statement = TOPIC_MODE_PROBLEM_TEMPLATE.format(
+        # Preserve user-provided context; only fall back to generic template when absent.
+        effective_problem_statement = request.problem_statement or TOPIC_MODE_PROBLEM_TEMPLATE.format(
             topic=request.topic.replace("_", " ")
         )
+    else:
+        effective_problem_statement = request.problem_statement
 
     effective_learner_attempt = request.learner_attempt if request.coaching_mode == "solve_problem" else None
 
@@ -263,7 +265,9 @@ async def create_dsa_coaching_session(
         user_id=current_user.id,
         with_turns=True,
     )
-    history_excerpt = _build_history_excerpt(session_with_turns.turns)
+    # Exclude the last turn (the current user message just saved) so it is not
+    # duplicated between history_excerpt and user_message.
+    history_excerpt = _build_history_excerpt(session_with_turns.turns[:-1])
 
     try:
         assistant_message, analysis, weak_area_signals, usage = await generate_dsa_coaching_turn(
@@ -414,7 +418,9 @@ async def send_dsa_coaching_message(
         user_id=current_user.id,
         with_turns=True,
     )
-    history_excerpt = _build_history_excerpt(session_with_turns.turns)
+    # Exclude the last turn (the current user message just saved) so it is not
+    # duplicated between history_excerpt and user_message.
+    history_excerpt = _build_history_excerpt(session_with_turns.turns[:-1])
 
     try:
         assistant_message, analysis, weak_area_signals, usage = await generate_dsa_coaching_turn(

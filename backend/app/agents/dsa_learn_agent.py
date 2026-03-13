@@ -259,7 +259,6 @@ class DSALearnState(TypedDict, total=False):
     prior_knowledge: str
     history_excerpt: str
     last_user_message: str
-    detected_mode: str
     analysis: dict[str, Any]
     assistant_message: str
     weak_area_signals: list[dict[str, str]]
@@ -287,13 +286,6 @@ def build_dsa_learn_prompt_inputs(
         "history_excerpt": ((history_excerpt or "").strip() or "No prior turns yet.")[-8000:],
         "last_user_message": last_user_message.strip(),
     }
-
-
-def _detect_mode_node(state: DSALearnState) -> dict[str, str]:
-    message = (state.get("last_user_message") or "").lower()
-    reflection_markers = ("i finished", "done", "reflect", "review")
-    detected_mode = "reflection" if any(marker in message for marker in reflection_markers) else "coach"
-    return {"detected_mode": detected_mode}
 
 
 async def _analyze_turn_node(state: DSALearnState) -> dict[str, Any]:
@@ -339,7 +331,7 @@ async def _analyze_turn_node(state: DSALearnState) -> dict[str, Any]:
 
 def _route_after_analysis(state: DSALearnState) -> str:
     analysis = state.get("analysis") or {}
-    if state.get("detected_mode") == "reflection" or bool(analysis.get("request_reflection")):
+    if bool(analysis.get("request_reflection")) or analysis.get("next_action") == "reflection":
         return "reflection_response"
     return "learn_response"
 
@@ -460,12 +452,10 @@ def _build_usage_totals(
 
 def _build_graph(checkpointer: Any = None) -> Any:
     builder = StateGraph(DSALearnState)
-    builder.add_node("detect_mode", _detect_mode_node)
     builder.add_node("analyze_turn", _analyze_turn_node)
     builder.add_node("learn_response", _learn_response_node)
     builder.add_node("reflection_response", _reflection_response_node)
-    builder.add_edge(START, "detect_mode")
-    builder.add_edge("detect_mode", "analyze_turn")
+    builder.add_edge(START, "analyze_turn")
     builder.add_conditional_edges(
         "analyze_turn",
         _route_after_analysis,
