@@ -74,6 +74,7 @@ interface CoachSessionSummary {
   turns_count: number;
   latest_assistant_preview?: string | null;
   concept_focus?: string | null;
+  problem_preview?: string | null;
 }
 
 interface WeakArea {
@@ -141,24 +142,37 @@ const TOPIC_GROUPS = TOPIC_OPTIONS.reduce<Record<string, typeof TOPIC_OPTIONS>>(
 }, {});
 
 const STAGE_CONFIG: Record<string, { label: string; cls: string }> = {
-  understanding: { label: 'Understanding', cls: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
-  application:   { label: 'Applying',      cls: 'text-green-400 bg-green-500/10 border-green-500/30' },
-  debugging:     { label: 'Debugging',     cls: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' },
-  complexity:    { label: 'Complexity',    cls: 'text-purple-400 bg-purple-500/10 border-purple-500/30' },
-  reflection:    { label: 'Reflecting',    cls: 'text-teal-400 bg-teal-500/10 border-teal-500/30' },
+  // learn mode
+  understanding:  { label: 'Understanding', cls: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
+  application:    { label: 'Applying',      cls: 'text-green-400 bg-green-500/10 border-green-500/30' },
+  debugging:      { label: 'Debugging',     cls: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30' },
+  complexity:     { label: 'Complexity',    cls: 'text-purple-400 bg-purple-500/10 border-purple-500/30' },
+  reflection:     { label: 'Reflecting',    cls: 'text-teal-400 bg-teal-500/10 border-teal-500/30' },
+  // solve mode
+  approach:       { label: 'Approach',      cls: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
+  implementation: { label: 'Coding',        cls: 'text-green-400 bg-green-500/10 border-green-500/30' },
+  optimization:   { label: 'Optimizing',    cls: 'text-purple-400 bg-purple-500/10 border-purple-500/30' },
 };
 
 const QUICK_REPLIES: Record<string, string[]> = {
-  assess_baseline:      ["I'm completely new to this", 'I know the basics', "I'm fairly comfortable"],
-  explain_concept:      ['Got it! Give me a practice problem', 'Still confused — try a simpler example', "What's the time complexity?"],
-  worked_example:       ['I follow the example, give me practice!', "Still confused — what's the tricky part?", 'Walk me through step 3 again'],
-  correct_misconception:['I see my mistake now', 'Can you clarify further?'],
-  bridge_prerequisite:  ['I know this already, please continue', 'Please explain this prerequisite first'],
-  give_practice:        ["I'll try it!", 'Give me a small hint first', "I don't know where to start"],
-  verify_understanding: ['Yes, I understand', 'Not quite — can you re-explain?', 'Can you give another example?'],
-  ask_initial_thought:  ['My initial thought is…', "I don't understand the problem yet"],
-  guided_hint:          ['Give me another hint', 'I think I see it now', 'Show me the full approach'],
-  default:              ["I understand", "I'm confused", 'Show me an example', 'Give me a practice problem'],
+  // learn mode
+  assess_baseline:       ["I'm completely new to this", 'I know the basics', "I'm fairly comfortable"],
+  explain_concept:       ['Got it! Give me a practice problem', 'Still confused — try a simpler example', "What's the time complexity?"],
+  worked_example:        ['I follow the example, give me practice!', "Still confused — what's the tricky part?", 'Walk me through step 3 again'],
+  correct_misconception: ['I see my mistake now', 'Can you clarify further?'],
+  bridge_prerequisite:   ['I know this already, please continue', 'Please explain this prerequisite first'],
+  give_practice:         ["I'll try it!", 'Give me a small hint first', "I don't know where to start"],
+  verify_understanding:  ['Yes, I understand', 'Not quite — can you re-explain?', 'Can you give another example?'],
+  // solve mode
+  discuss_problem:       ["I understand the problem", "Can you walk me through an example?", "I'm not sure what it's asking"],
+  assess_understanding:  ["I know this pattern", "I'm not familiar with this", "I've seen something similar before"],
+  check_approach:        ["My approach looks right to me", "I think there's a flaw", "Can you give me a hint?"],
+  identify_mistake:      ["I see the issue now", "I'm not sure how to fix it", "Can you explain further?"],
+  guided_hint:           ['Give me another hint', 'I think I see it now', 'Show me the full approach'],
+  suggest_pattern:       ["I know this pattern!", "Can you explain the pattern more?", "How do I apply it here?"],
+  code_review:           ["I'll fix that", "I don't see why that's wrong", "What should I change first?"],
+  complexity_discussion: ["I see, can we do better?", "My solution is already optimal", "What complexity should I aim for?"],
+  default:               ["I understand", "I'm confused", 'Show me an example', 'Give me a hint'],
 };
 const ALWAYS_REPLIES = ['Reflect on this session'];
 
@@ -177,21 +191,38 @@ function relativeTime(dateStr: string): string {
 }
 
 function buildSessionLabels(sessions: CoachSessionSummary[]): Record<number, string> {
-  const topicCount: Record<string, number> = {};
-  const topicIndex: Record<number, number> = {};
   const sorted = [...sessions].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
+  // For solve mode: number problems sequentially
+  const solveIndex: Record<number, number> = {};
+  let solveCounter = 0;
   for (const s of sorted) {
-    topicCount[s.topic] = (topicCount[s.topic] || 0) + 1;
-    topicIndex[s.id] = topicCount[s.topic];
+    if (s.coaching_mode === 'solve_problem') {
+      solveCounter += 1;
+      solveIndex[s.id] = solveCounter;
+    }
+  }
+  // For learn mode: number by topic as before
+  const topicCount: Record<string, number> = {};
+  const topicIndex: Record<number, number> = {};
+  for (const s of sorted) {
+    if (s.coaching_mode === 'learn_topic') {
+      topicCount[s.topic] = (topicCount[s.topic] || 0) + 1;
+      topicIndex[s.id] = topicCount[s.topic];
+    }
   }
   const labels: Record<number, string> = {};
   for (const s of sessions) {
-    const hasDuplicate = sessions.filter((x) => x.topic === s.topic).length > 1;
-    labels[s.id] = hasDuplicate
-      ? `${TOPIC_LABELS[s.topic]} #${topicIndex[s.id]}`
-      : TOPIC_LABELS[s.topic];
+    if (s.coaching_mode === 'solve_problem') {
+      const preview = s.problem_preview ? s.problem_preview : `Problem #${solveIndex[s.id]}`;
+      labels[s.id] = preview;
+    } else {
+      const hasDuplicate = sessions.filter((x) => x.topic === s.topic && x.coaching_mode === 'learn_topic').length > 1;
+      labels[s.id] = hasDuplicate
+        ? `${TOPIC_LABELS[s.topic]} #${topicIndex[s.id]}`
+        : TOPIC_LABELS[s.topic];
+    }
   }
   return labels;
 }
@@ -252,6 +283,7 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
 
   // New session form
   const [topic, setTopic] = useState<DSATopic>('arrays');
+  const [language, setLanguage] = useState<'english' | 'bengali' | 'hindi'>('english');
   const [problemStatement, setProblemStatement] = useState('');
   const [priorKnowledge, setPriorKnowledge] = useState('');
   const [attemptDraft, setAttemptDraft] = useState('');
@@ -355,14 +387,21 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
     setIsCreating(true);
     setError('');
     try {
-      const payload = {
-        coaching_mode: mode,
-        topic,
-        problem_statement: mode === 'solve_problem' ? problemStatement.trim() || null : null,
-        prior_knowledge: mode === 'learn_topic' ? priorKnowledge.trim() || null : null,
-        learner_attempt: mode === 'solve_problem' ? attemptDraft.trim() || null : null,
-        message: openingMessage.trim() || null,
-      };
+      const payload =
+        mode === 'solve_problem'
+          ? {
+              coaching_mode: mode,
+              language,
+              problem_statement: problemStatement.trim(),
+              learner_attempt: attemptDraft.trim() || null,
+            }
+          : {
+              coaching_mode: mode,
+              topic,
+              language,
+              prior_knowledge: priorKnowledge.trim() || null,
+              message: openingMessage.trim() || null,
+            };
       const { data } = await api.post<CoachSession>('/api/dsa-coach/sessions', payload);
       setShowNewSessionModal(false);
       setProblemStatement('');
@@ -631,7 +670,9 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
                   <BookOpen className="w-8 h-8 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">
                     {sessions.length === 0
-                      ? 'Click "New session" to start learning.'
+                      ? mode === 'solve_problem'
+                        ? 'Click "New session" to paste a problem and start coaching.'
+                        : 'Click "New session" to start learning.'
                       : 'Select a session from the sidebar.'}
                   </p>
                 </div>
@@ -712,7 +753,7 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
                   value={attemptDraft}
                   onChange={(e) => setAttemptDraft(e.target.value)}
                   className="w-full bg-[#0b0f14] border border-[#1f232b] rounded-lg px-3 py-2 text-xs min-h-14 resize-y font-mono text-gray-300 focus:outline-none focus:border-sky-500/40"
-                  placeholder="Update your approach / code (optional)"
+                  placeholder="Paste or update your code here — the coach will review it each turn (optional)"
                   disabled={isSending}
                 />
               </div>
@@ -788,21 +829,37 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
             {/* Modal body */}
             <form onSubmit={handleCreateSession} className="overflow-y-auto px-6 py-5 space-y-4 flex-1">
 
+              {mode === 'learn_topic' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Topic</label>
+                  <select
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value as DSATopic)}
+                    className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-sky-500/50"
+                    disabled={isCreating}
+                  >
+                    {Object.entries(TOPIC_GROUPS).map(([group, options]) => (
+                      <optgroup key={group} label={group}>
+                        {options.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Topic</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Language</label>
                 <select
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value as DSATopic)}
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as 'english' | 'bengali' | 'hindi')}
                   className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-sky-500/50"
                   disabled={isCreating}
                 >
-                  {Object.entries(TOPIC_GROUPS).map(([group, options]) => (
-                    <optgroup key={group} label={group}>
-                      {options.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
+                  <option value="english">English</option>
+                  <option value="bengali">Bengali</option>
+                  <option value="hindi">Hindi</option>
                 </select>
               </div>
 
@@ -830,8 +887,8 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
                     <textarea
                       value={problemStatement}
                       onChange={(e) => setProblemStatement(e.target.value)}
-                      className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-sm text-gray-100 min-h-28 resize-y focus:outline-none focus:border-sky-500/50"
-                      placeholder="Paste the full problem statement here…"
+                      className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-sm text-gray-100 min-h-32 resize-y focus:outline-none focus:border-sky-500/50"
+                      placeholder="Paste the full LeetCode problem statement here…"
                       disabled={isCreating}
                       required
                       minLength={20}
@@ -839,29 +896,32 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                      Your current approach <span className="text-gray-600 font-normal">(optional)</span>
+                      Your current code / approach{' '}
+                      <span className="text-gray-600 font-normal">(optional — paste if you have one)</span>
                     </label>
                     <textarea
                       value={attemptDraft}
                       onChange={(e) => setAttemptDraft(e.target.value)}
-                      className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-xs text-gray-300 min-h-20 resize-y font-mono focus:outline-none focus:border-sky-500/50"
-                      placeholder="Pseudocode or code attempt…"
+                      className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-xs text-gray-300 min-h-24 resize-y font-mono focus:outline-none focus:border-sky-500/50"
+                      placeholder="Paste your code or pseudocode here. The coach will review it and guide you to fix it."
                       disabled={isCreating}
                     />
                   </div>
                 </>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Opening message</label>
-                <input
-                  type="text"
-                  value={openingMessage}
-                  onChange={(e) => setOpeningMessage(e.target.value)}
-                  className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-sky-500/50"
-                  disabled={isCreating}
-                />
-              </div>
+              {mode === 'learn_topic' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">Opening message</label>
+                  <input
+                    type="text"
+                    value={openingMessage}
+                    onChange={(e) => setOpeningMessage(e.target.value)}
+                    className="w-full bg-[#0b0f14] border border-[#252b36] rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-sky-500/50"
+                    disabled={isCreating}
+                  />
+                </div>
+              )}
 
               {error && (
                 <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
@@ -880,7 +940,7 @@ export default function DSAModeChat({ mode }: DSAModeChatProps) {
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreating || (mode === 'solve_problem' && !problemStatement.trim())}
+                  disabled={isCreating || (mode === 'solve_problem' && problemStatement.trim().length < 20)}
                   className="flex-1 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:bg-sky-900/50 disabled:text-gray-600 px-4 py-2.5 text-sm font-medium transition-colors inline-flex items-center justify-center gap-2"
                 >
                   {isCreating ? (

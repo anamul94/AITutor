@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 DSATopic = Literal[
     "arrays",
@@ -31,11 +31,13 @@ DSATopic = Literal[
 ]
 DSATurnRole = Literal["user", "assistant", "system"]
 DSACoachingMode = Literal["learn_topic", "solve_problem"]
+DSALanguage = Literal["english", "bengali", "hindi"]
 
 
 class DSACoachSessionCreateRequest(BaseModel):
-    topic: DSATopic
+    topic: DSATopic = "general_problem_solving"
     coaching_mode: DSACoachingMode = "solve_problem"
+    language: DSALanguage = "english"
     problem_statement: Optional[str] = Field(default=None, min_length=20, max_length=12000)
     prior_knowledge: Optional[str] = Field(default=None, max_length=2000)
     learner_attempt: Optional[str] = Field(default=None, max_length=12000)
@@ -118,12 +120,14 @@ class DSACoachSessionSummaryResponse(BaseModel):
     turns_count: int
     latest_assistant_preview: Optional[str] = None
     concept_focus: Optional[str] = None
+    problem_preview: Optional[str] = None
 
 
 class DSACoachSessionResponse(BaseModel):
     id: int
     topic: DSATopic
     coaching_mode: DSACoachingMode
+    language: str = "english"
     problem_statement: str
     prior_knowledge: Optional[str] = None
     learner_attempt: Optional[str] = None

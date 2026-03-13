@@ -26,10 +26,6 @@ from app.schemas.dsa_coach import (
 
 router = APIRouter()
 
-DEFAULT_COACHING_OPENING = (
-    "Please coach me through this problem step by step. "
-    "Ask questions and avoid revealing the full solution too early."
-)
 DEFAULT_LEARN_TOPIC_OPENING = (
     "Teach me this topic from fundamentals, check prerequisite knowledge, "
     "then give me a practice problem and guide me step by step."
@@ -38,9 +34,9 @@ TOPIC_MODE_PROBLEM_TEMPLATE = (
     "Topic-first coaching mode for '{topic}'. Explain core ideas, check prerequisites, "
     "and transition to guided problem solving."
 )
-INITIAL_THOUGHT_PROMPT = (
-    "Before I give hints, what is your initial thought about solving this problem?\n"
-    "If you are stuck, say: 'I don't understand the problem yet' and I will break it down first."
+DEFAULT_SOLVE_OPENING = "I need help solving this problem. Please coach me step by step."
+DEFAULT_SOLVE_WITH_CODE_OPENING = (
+    "Here is my current approach. Please review it and help me understand where I went wrong."
 )
 
 SEVERITY_TO_SCORE = {
@@ -106,6 +102,7 @@ def _serialize_session(session: DSACoachSession) -> dict[str, Any]:
         "id": session.id,
         "topic": session.topic,
         "coaching_mode": session.coaching_mode,
+        "language": session.language or "english",
         "problem_statement": session.problem_statement,
         "prior_knowledge": session.prior_knowledge,
         "learner_attempt": session.learner_attempt,
@@ -221,9 +218,13 @@ async def create_dsa_coaching_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    opening_message = request.message or DEFAULT_COACHING_OPENING
     if request.coaching_mode == "learn_topic":
         opening_message = request.message or DEFAULT_LEARN_TOPIC_OPENING
+    else:
+        has_attempt = bool((request.learner_attempt or "").strip())
+        opening_message = request.message or (
+            DEFAULT_SOLVE_WITH_CODE_OPENING if has_attempt else DEFAULT_SOLVE_OPENING
+        )
 
     effective_problem_statement = request.problem_statement
     if request.coaching_mode == "learn_topic":
@@ -237,6 +238,7 @@ async def create_dsa_coaching_session(
         user_id=current_user.id,
         topic=request.topic,
         coaching_mode=request.coaching_mode,
+        language=request.language,
         problem_statement=effective_problem_statement or "",
         prior_knowledge=request.prior_knowledge,
         learner_attempt=effective_learner_attempt,
@@ -255,30 +257,6 @@ async def create_dsa_coaching_session(
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
-    if request.coaching_mode == "solve_problem" and request.message is None:
-        assistant_turn = DSACoachTurn(
-            session_id=session.id,
-            role="assistant",
-            content=INITIAL_THOUGHT_PROMPT,
-            turn_metadata={
-                "analysis": {
-                    "next_action": "ask_initial_thought",
-                    "learner_stage": "understanding",
-                    "hint_level": "nudge",
-                }
-            },
-        )
-        db.add(assistant_turn)
-        session.updated_at = datetime.now(timezone.utc)
-        await db.commit()
-        final_session = await _get_session_or_404(
-            db,
-            session_id=session.id,
-            user_id=current_user.id,
-            with_turns=True,
-        )
-        return _serialize_session(final_session)
-
     session_with_turns = await _get_session_or_404(
         db,
         session_id=session.id,
@@ -291,6 +269,7 @@ async def create_dsa_coaching_session(
         assistant_message, analysis, weak_area_signals, usage = await generate_dsa_coaching_turn(
             coaching_mode=session_with_turns.coaching_mode,
             topic=session_with_turns.topic,
+            language=session_with_turns.language or "english",
             problem_statement=session_with_turns.problem_statement,
             prior_knowledge=session_with_turns.prior_knowledge,
             learner_attempt=session_with_turns.learner_attempt,
@@ -360,8 +339,16 @@ async def list_dsa_coaching_sessions(
             if turn.role == "assistant" and isinstance(turn.turn_metadata, dict):
                 analysis = turn.turn_metadata.get("analysis", {})
                 if isinstance(analysis, dict):
-                    latest_concept_focus = analysis.get("concept_focus") or None
+                    # learn_topic uses concept_focus; solve_problem uses pattern_focus
+                    latest_concept_focus = (
+                        analysis.get("concept_focus") or analysis.get("pattern_focus") or None
+                    )
                 break
+
+        problem_preview: str | None = None
+        if session.coaching_mode == "solve_problem" and session.problem_statement:
+            raw = session.problem_statement.strip()
+            problem_preview = raw[:80] + "…" if len(raw) > 80 else raw
 
         summaries.append(
             {
@@ -374,6 +361,7 @@ async def list_dsa_coaching_sessions(
                 "turns_count": len(session.turns),
                 "latest_assistant_preview": latest_assistant_preview,
                 "concept_focus": latest_concept_focus,
+                "problem_preview": problem_preview,
             }
         )
     return summaries
@@ -432,6 +420,7 @@ async def send_dsa_coaching_message(
         assistant_message, analysis, weak_area_signals, usage = await generate_dsa_coaching_turn(
             coaching_mode=session_with_turns.coaching_mode,
             topic=session_with_turns.topic,
+            language=session_with_turns.language or "english",
             problem_statement=session_with_turns.problem_statement,
             prior_knowledge=session_with_turns.prior_knowledge,
             learner_attempt=session_with_turns.learner_attempt,
@@ -462,7 +451,11 @@ async def send_dsa_coaching_message(
 
     analysis_stage = analysis.get("learner_stage") if isinstance(analysis, dict) else None
     hint_level = analysis.get("hint_level") if isinstance(analysis, dict) else None
-    concept_focus = analysis.get("concept_focus") if isinstance(analysis, dict) else None
+    # learn_topic uses concept_focus; solve_problem uses pattern_focus
+    concept_focus = (
+        (analysis.get("concept_focus") or analysis.get("pattern_focus"))
+        if isinstance(analysis, dict) else None
+    )
     next_action = analysis.get("next_action") if isinstance(analysis, dict) else None
     return {
         "session_id": session_with_turns.id,
