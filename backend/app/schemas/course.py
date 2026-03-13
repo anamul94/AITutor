@@ -37,6 +37,7 @@ class GeneratedLessonQuizSchema(BaseModel):
 
 PreferredLevel = Literal["beginner", "intermediate", "advanced"]
 CourseLanguage = Literal["english", "bengali", "hindi"]
+ContentStyle = Literal["conceptual", "balanced", "practical"]
 
 
 class CourseGenerateRequest(BaseModel):
@@ -44,6 +45,7 @@ class CourseGenerateRequest(BaseModel):
     learning_goal: Optional[str] = None
     preferred_level: Optional[PreferredLevel] = None
     language: CourseLanguage = "english"
+    content_style: ContentStyle = "balanced"
 
     @field_validator("learning_goal", mode="before")
     @classmethod
@@ -80,6 +82,8 @@ class CourseResponse(BaseModel):
     learning_goal: Optional[str] = None
     preferred_level: Optional[PreferredLevel] = None
     language: CourseLanguage = "english"
+    content_style: ContentStyle = "balanced"
+    warnings: List[str] = Field(default_factory=list)
     progress_percentage: float = 0.0
     modules: List[ModuleResponse]
 
@@ -101,7 +105,7 @@ class LessonContentResponse(BaseModel):
     description: Optional[str] = None
     content: Optional[str]
     quiz_data: Optional[List[dict]]
-    progress: Optional[List[UserProgressResponse]] = []
+    progress: List[UserProgressResponse] = Field(default_factory=list)
 
 
 class LessonQuizResponse(BaseModel):

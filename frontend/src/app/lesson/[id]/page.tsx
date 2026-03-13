@@ -51,6 +51,10 @@ interface CourseModule {
 }
 
 interface CourseData {
+  title?: string;
+  preferred_level?: 'beginner' | 'intermediate' | 'advanced' | null;
+  content_style?: 'conceptual' | 'balanced' | 'practical';
+  warnings?: string[];
   modules: CourseModule[];
 }
 
@@ -60,6 +64,7 @@ export default function LessonPage() {
   const { user, loading } = useAuth();
 
   const [lesson, setLesson] = useState<LessonContent | null>(null);
+  const [courseMeta, setCourseMeta] = useState<CourseData | null>(null);
   const [nextLessonId, setNextLessonId] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(true);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
@@ -84,6 +89,7 @@ export default function LessonPage() {
       setError('');
       setIsCompleted(false);
       setNextLessonId(null);
+      setCourseMeta(null);
       setSelectedAnswers({});
       setShowResults(false);
       setQuizScore(null);
@@ -99,6 +105,7 @@ export default function LessonPage() {
 
       // Fetch the full course to find the next lesson
       const courseRes = await api.get<CourseData>(`/api/courses/${data.course_id}`);
+      setCourseMeta(courseRes.data);
 
       const allLessons = courseRes.data.modules
         .slice()
@@ -187,9 +194,9 @@ export default function LessonPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-950 text-white">
         <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-6" />
-        <h2 className="text-2xl font-bold mb-2">Generating Lesson...</h2>
+        <h2 className="text-2xl font-bold mb-2">Generating Technical Lesson...</h2>
         <p className="text-gray-400 max-w-sm text-center">
-          Our AI Tutor is currently crafting custom curriculum and examples for you.
+          Our AI Tutor is crafting technical explanations, work-relevant examples, and realistic pitfalls for you.
         </p>
       </div>
     );
@@ -205,10 +212,10 @@ export default function LessonPage() {
             </div>
           )}
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/technical-learning')}
             className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm"
           >
-            Back to Dashboard
+            Back to Technical Learning
           </button>
         </div>
       </div>
@@ -226,7 +233,7 @@ export default function LessonPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Syllabus
         </button>
         <div className="flex items-center gap-2 text-blue-500 font-medium">
-          <BookOpen className="w-4 h-4" /> AITutor Lesson
+          <BookOpen className="w-4 h-4" /> Technical Learning Lesson
         </div>
       </div>
 
@@ -237,10 +244,33 @@ export default function LessonPage() {
           </div>
         )}
 
+        {courseMeta?.warnings && courseMeta.warnings.length > 0 && (
+          <div className="mb-6 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200">
+            {courseMeta.warnings[0]}
+          </div>
+        )}
+
         <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <h1 className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-            {lesson.title}
-          </h1>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="text-[11px] uppercase tracking-[0.2em] text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-full px-2.5 py-1">
+                Technical Learning
+              </span>
+              {courseMeta?.preferred_level && (
+                <span className="text-[11px] uppercase tracking-[0.18em] text-gray-300 bg-gray-900 border border-gray-800 rounded-full px-2.5 py-1">
+                  {courseMeta.preferred_level}
+                </span>
+              )}
+              {courseMeta?.content_style && (
+                <span className="text-[11px] uppercase tracking-[0.18em] text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-2.5 py-1">
+                  {courseMeta.content_style}
+                </span>
+              )}
+            </div>
+            <h1 className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+              {lesson.title}
+            </h1>
+          </div>
           <button
             onClick={handleCompleteLesson}
             disabled={isCompleting || isCompleted}

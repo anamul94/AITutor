@@ -24,6 +24,9 @@ interface CourseData {
   id: number;
   title: string;
   description: string;
+  preferred_level?: 'beginner' | 'intermediate' | 'advanced' | null;
+  content_style?: 'conceptual' | 'balanced' | 'practical';
+  warnings?: string[];
   modules: ModuleItem[];
 }
 
@@ -94,16 +97,26 @@ export default function CoursePage() {
     <div className="min-h-screen bg-gray-950 text-white p-6 md:p-12">
       <div className="max-w-4xl mx-auto">
         <button
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.push('/technical-learning')}
           className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors border border-gray-800 bg-gray-900 rounded-xl px-4 py-2 mb-8"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          <ArrowLeft className="w-4 h-4" /> Back to Technical Learning
         </button>
 
         <header className="mb-12">
-          <div className="flex items-center gap-3 text-blue-500 mb-4 font-medium text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-blue-500 mb-4 font-medium text-sm">
             <BookOpen className="w-5 h-5" />
-            <span>AI Generated Course</span>
+            <span>Technical Learning</span>
+            {course.preferred_level && (
+              <span className="text-[11px] uppercase tracking-[0.18em] text-gray-300 bg-gray-900 px-3 py-1 rounded-full border border-gray-800">
+                {course.preferred_level}
+              </span>
+            )}
+            {course.content_style && (
+              <span className="text-[11px] uppercase tracking-[0.18em] text-cyan-300 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
+                {course.content_style}
+              </span>
+            )}
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
             {course.title}
@@ -111,6 +124,11 @@ export default function CoursePage() {
           <p className="text-xl text-gray-400 leading-relaxed mb-6">
             {course.description}
           </p>
+          {course.warnings && course.warnings.length > 0 && (
+            <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 max-w-3xl">
+              {course.warnings[0]}
+            </div>
+          )}
           <div className="flex items-center gap-4 text-sm text-gray-500">
             <span className="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
               <Clock className="w-4 h-4" /> {sortedModules.length} Modules

@@ -11,6 +11,10 @@ class Course(Base):
             name="ck_courses_preferred_level",
         ),
         CheckConstraint(
+            "content_style IN ('conceptual', 'balanced', 'practical')",
+            name="ck_courses_content_style",
+        ),
+        CheckConstraint(
             "language IN ('english', 'bengali', 'hindi')",
             name="ck_courses_language",
         ),
@@ -22,6 +26,13 @@ class Course(Base):
     topic = Column(String, index=True, nullable=False)
     learning_goal = Column(Text, nullable=True)
     preferred_level = Column(String(20), nullable=True)
+    content_style = Column(
+        String(20),
+        nullable=False,
+        default="balanced",
+        server_default=text("'balanced'"),
+    )
+    generation_warnings = Column(JSON, nullable=False, default=list, server_default=text("'[]'"))
     language = Column(String(20), nullable=False, default="english", server_default=text("'english'"))
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -33,6 +44,11 @@ class Course(Base):
         cascade="all, delete-orphan",
         order_by="Module.order_index",
     )
+
+    @property
+    def warnings(self) -> list[str]:
+        raw = self.generation_warnings or []
+        return [str(item) for item in raw if isinstance(item, str)]
 
 class Module(Base):
     __tablename__ = "modules"

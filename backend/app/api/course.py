@@ -4,11 +4,19 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+
 from app.api.deps import get_db, get_current_user
 from app.core.config import settings
-from app.models.user import User
 from app.models.course import Course, LLMUsageEvent, Module, Lesson, UserProgress
-from app.schemas.course import CourseGenerateRequest, CourseResponse, LessonContentResponse, LessonQuizResponse, UserProgressResponse, UserProgressRequest
+from app.models.user import User
+from app.schemas.course import (
+    CourseGenerateRequest,
+    CourseResponse,
+    LessonContentResponse,
+    LessonQuizResponse,
+    UserProgressRequest,
+    UserProgressResponse,
+)
 from app.agents import generate_course_syllabus, generate_lesson_content, generate_lesson_quiz
 
 router = APIRouter()
@@ -136,11 +144,12 @@ async def generate_and_save_course(
         await enforce_free_course_limit(db, current_user.id)
 
     try:
-        generated_course, usage = await generate_course_syllabus(
+        generated_course, warnings, usage = await generate_course_syllabus(
             topic=topic,
             learning_goal=request.learning_goal,
             preferred_level=request.preferred_level,
             language=request.language,
+            content_style=request.content_style,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM Generation failed: {str(e)}")
@@ -152,6 +161,8 @@ async def generate_and_save_course(
         topic=topic,
         learning_goal=request.learning_goal,
         preferred_level=request.preferred_level,
+        content_style=request.content_style,
+        generation_warnings=warnings,
         language=request.language,
         created_by=current_user.id
     )
@@ -332,6 +343,7 @@ async def get_or_generate_lesson_content(
             learning_goal=lesson.module.course.learning_goal,
             preferred_level=lesson.module.course.preferred_level,
             language=lesson.module.course.language or "english",
+            content_style=lesson.module.course.content_style,
         )
         
         # Save generated content to database

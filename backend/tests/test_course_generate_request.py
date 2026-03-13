@@ -11,14 +11,17 @@ class CourseGenerateRequestTests(unittest.TestCase):
             topic="FastAPI",
             learning_goal="Build and deploy a production-ready FastAPI service.",
             preferred_level="beginner",
+            content_style="practical",
         )
         self.assertEqual(payload.preferred_level, "beginner")
+        self.assertEqual(payload.content_style, "practical")
         self.assertEqual(payload.learning_goal, "Build and deploy a production-ready FastAPI service.")
 
     def test_legacy_payload_topic_only_is_valid(self) -> None:
         payload = CourseGenerateRequest(topic="Machine Learning")
         self.assertIsNone(payload.learning_goal)
         self.assertIsNone(payload.preferred_level)
+        self.assertEqual(payload.content_style, "balanced")
 
     def test_rejects_invalid_preferred_level(self) -> None:
         with self.assertRaises(ValidationError):
@@ -51,6 +54,14 @@ class CourseGenerateRequestTests(unittest.TestCase):
             preferred_level="advanced",
         )
         self.assertIsNone(payload.learning_goal)
+
+    def test_rejects_invalid_content_style(self) -> None:
+        with self.assertRaises(ValidationError):
+            CourseGenerateRequest(
+                topic="React",
+                learning_goal="Build a performant component system for a production dashboard.",
+                content_style="lab-heavy",
+            )
 
 
 if __name__ == "__main__":
