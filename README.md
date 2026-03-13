@@ -73,15 +73,19 @@ AITutor/
 - Node.js 20+
 - Docker + Docker Compose
 
-### 2) Start database
+### 2) Docker setup (recommended)
 
 ```bash
-docker compose up -d
+make setup
 ```
 
-This starts PostgreSQL on `localhost:5431`.
+This copies missing env files, starts the Docker stack, runs DB migrations, and serves:
 
-### 3) Backend setup
+- Frontend on `http://localhost:3004`
+- Backend on `http://localhost:8020`
+- PostgreSQL on `localhost:5431`
+
+### 3) Local development setup (optional)
 
 ```bash
 cd backend
@@ -144,11 +148,15 @@ Frontend URL: `http://localhost:3000`
 From project root:
 
 ```bash
-make install    # install backend+frontend deps
-make db-up      # start postgres
-make migrate    # run alembic migrations
-make backend    # run backend
-make frontend   # run frontend
+make setup        # docker-first bootstrap: env, build, db, migrations, app containers
+make setup-local  # local bootstrap: env, deps, db, migrations
+make install      # install backend+frontend deps for local development
+make db-up        # start postgres only
+make migrate      # run alembic migrations (local venv if present, else Docker)
+make backend      # run backend locally
+make frontend     # run frontend locally
+make docker-up    # build and start all docker services
+make docker-down  # stop and remove docker services
 ```
 
 ## API Overview
