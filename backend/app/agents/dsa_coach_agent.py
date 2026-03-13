@@ -44,6 +44,7 @@ async def generate_dsa_coaching_turn(
     *,
     coaching_mode: str,
     topic: str,
+    language: str = "english",
     problem_statement: str,
     prior_knowledge: str | None,
     learner_attempt: str | None,
@@ -55,6 +56,7 @@ async def generate_dsa_coaching_turn(
     if normalized_mode == "learn_topic":
         return await generate_dsa_learn_turn(
             topic=topic,
+            language=language,
             problem_statement=problem_statement,
             prior_knowledge=prior_knowledge,
             history_excerpt=history_excerpt,
@@ -63,6 +65,7 @@ async def generate_dsa_coaching_turn(
         )
     return await generate_dsa_solve_turn(
         topic=topic,
+        language=language,
         problem_statement=problem_statement,
         prior_knowledge=prior_knowledge,
         learner_attempt=learner_attempt,

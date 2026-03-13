@@ -16,14 +16,19 @@ from sqlalchemy.sql import func
 from app.models.user import Base
 
 
+_ALL_TOPICS = (
+    "'arrays', 'linked_lists', 'stacks_and_queues', 'sliding_window', 'two_pointers', "
+    "'binary_search', 'sorting', 'hashing', 'trees', 'binary_search_tree', 'heaps', "
+    "'graphs', 'recursion', 'backtracking', 'dynamic_programming', 'greedy', 'tries', "
+    "'bit_manipulation', 'string_manipulation', 'intervals', 'matrix', "
+    "'general_problem_solving'"
+)
+
+
 class DSACoachSession(Base):
     __tablename__ = "dsa_coach_sessions"
     __table_args__ = (
-        CheckConstraint(
-            "topic IN ('arrays', 'sliding_window', 'binary_search', 'graphs', "
-            "'recursion', 'dynamic_programming', 'general_problem_solving')",
-            name="ck_dsa_coach_sessions_topic",
-        ),
+        CheckConstraint(f"topic IN ({_ALL_TOPICS})", name="ck_dsa_coach_sessions_topic"),
         CheckConstraint(
             "coaching_mode IN ('learn_topic', 'solve_problem')",
             name="ck_dsa_coach_sessions_coaching_mode",
@@ -31,6 +36,10 @@ class DSACoachSession(Base):
         CheckConstraint(
             "status IN ('active', 'completed', 'archived')",
             name="ck_dsa_coach_sessions_status",
+        ),
+        CheckConstraint(
+            "language IN ('english', 'bengali', 'hindi')",
+            name="ck_dsa_coach_sessions_language",
         ),
     )
 
@@ -43,6 +52,7 @@ class DSACoachSession(Base):
         default="solve_problem",
         server_default=text("'solve_problem'"),
     )
+    language = Column(String(20), nullable=False, default="english", server_default=text("'english'"))
     prior_knowledge = Column(Text, nullable=True)
     problem_statement = Column(Text, nullable=False)
     learner_attempt = Column(Text, nullable=True)

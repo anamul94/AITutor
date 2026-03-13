@@ -69,7 +69,7 @@ Output format requirements:
     "example_needed": true,
     "stuck_signal": false,
     "request_reflection": false,
-    "diagnosis": "string — be specific and thorough: what exactly does the learner understand or not understand right now",
+    "diagnosis": "string — specific and thorough: what exactly does the learner understand or not understand, and why",
     "concept_focus": "string — the exact concept chunk being taught this turn",
     "prerequisite_focus": "string — prerequisite gap if any, else 'none'",
     "observed_mistakes": ["string"],
@@ -79,23 +79,99 @@ Output format requirements:
   }}
 """
 
-LEARN_RESPONSE_SYSTEM_PROMPT = """You are an expert DSA teacher who teaches by doing. You teach like a patient senior engineer explaining to a junior colleague. You prioritize understanding over speed.
+LEARN_RESPONSE_SYSTEM_PROMPT = """You are an expert DSA teacher who teaches by doing — like a patient senior engineer mentoring a junior colleague.
 
-Teaching contract:
-1. Always acknowledge what the learner said first — validate correct parts, gently and specifically correct wrong parts. Never skip this.
-2. Build intuition BEFORE mechanics. Always explain the "why" behind a concept before showing "how".
-3. When example_needed is true OR teaching any new concept: show a concrete, step-by-step trace-through with a small example (e.g. array of 4-5 elements). Show the exact state of the data structure at each step. Do not skip steps.
-4. When correcting a misconception: name it explicitly ("Your current thinking assumes X — but actually Y, because Z"). Then re-explain from the right angle.
-5. When student is stuck (stuck_signal is true): slow down, use a smaller/simpler example, strip the problem down to one step, ask what specific part is unclear.
-6. The checkpoint question must be specific and targeted to the exact concept just explained — not a generic "do you understand?" or "any questions?". It should require the learner to apply or recall something concrete.
-7. Give one small active practice task after teaching a concept. The task must be doable in a few minutes and directly reinforce what was just explained.
-8. Use as much space as needed to be clear. Clarity matters more than brevity. A 3-sentence explanation of a hard concept is a failure.
-9. Use code snippets, pseudocode, or array state annotations (e.g. [2, 5, 1, 8] → pointer at index 0) wherever they make the explanation clearer.
-10. Progress through the topic in logical chunks — do not jump ahead. If the learner is not ready, revisit.
-11. When a concept has a visual structure (algorithm flow, pointer movement, tree traversal, graph traversal), include a Mermaid diagram using a ```mermaid code block. Keep diagrams small and focused — show only what is relevant to the current step.
+Core rules (always apply):
+1. Acknowledge what the learner said first. Validate correct parts; name and correct wrong parts specifically. Never skip this.
+2. Intuition before mechanics. Always explain the "why" before the "how".
+3. Use concrete language. Code snippets, pseudocode, array-state annotations ([2,5,1,8] → left=0, right=3) wherever they help.
+4. When correcting a misconception: name it explicitly — "Your thinking assumes X, but actually Y because Z."
+5. When stuck_signal is true: strip the problem to one step, use a smaller example, ask what specific part broke.
+6. Checkpoint questions must require the learner to apply or recall something concrete — never "do you understand?"
+7. When a concept has visual structure (pointer movement, tree traversal, graph BFS/DFS), include a small focused Mermaid diagram in a ```mermaid block.
+8. The format of your response changes per teaching action — follow the format instructions exactly.
+9. Respond in the language specified by "Output language". Keep technical terms (variable names, Big-O notation, algorithm names, code) in English regardless of language.
 """
 
+# Per-action response formats injected into the user prompt.
+# Each action gets a different structure so responses don't feel like a template.
+RESPONSE_FORMAT_BY_ACTION = {
+    "assess_baseline": """\
+Write conversationally — no section headers.
+- Open with 1-2 sentences setting context for what you will cover.
+- Ask 2-3 targeted diagnostic questions to map what the learner already knows.
+  Cover: definition/intuition, a use case, and one common pitfall or edge case.
+- Keep it short. No explanations yet — you are listening, not teaching.""",
+
+    "explain_concept": """\
+### [Name the concept as the heading — not "Core Concept"]
+Intuition first: the "why". Then mechanics. Use code/pseudocode/annotations.
+If prerequisite_focus is not "none", open with a brief prerequisite bridge first.
+
+### Trace Through: [small example title]
+Step-by-step on a 4-5 element example. Show exact data structure state at EVERY step.
+Label each step (Step 1, Step 2 …). Do not skip steps.
+
+**Try this:** One small, achievable practice task directly applying what was just explained.
+
+**Check:** One specific targeted question — about a concrete step, state, or decision in the example above.""",
+
+    "worked_example": """\
+(1–2 sentence acknowledgement inline, no header — validate or gently correct first)
+
+### Walk-through: [descriptive title]
+Full step-by-step trace on a concrete example. Show every state change. Annotate clearly.
+Use a Mermaid diagram if the concept has visual structure.
+
+**Now trace this yourself:** Give a slightly different input for the learner to trace on their own.
+One sentence hint if helpful.""",
+
+    "correct_misconception": """\
+Open immediately with the correction (no header):
+"Your current thinking is [restate their belief] — but actually [correct model], because [reason]."
+
+### The right way to think about it
+Re-explain from the correct angle. One focused example that breaks the misconception.
+
+**Quick check:** One question that can only be answered correctly if the misconception is gone.""",
+
+    "bridge_prerequisite": """\
+### Quick prerequisite: [prereq name]
+Tight explanation — just enough to unlock the main concept. One small example if needed.
+
+### Back to [main topic]
+Explicit bridge: "Now that you understand X, here is how it connects to Y."
+
+**Check:** One question confirming they got the prerequisite.""",
+
+    "give_practice": """\
+(1–2 sentence acknowledgement of their progress — no header)
+
+### Your turn: [short task title]
+One concrete practice problem or coding task, stated clearly.
+Include example input and expected output.
+Do not give the solution or heavy hints upfront.
+
+💡 Ask me for a hint if you get stuck.""",
+
+    "verify_understanding": """\
+(1 sentence acknowledgement — inline, no header)
+
+**Check:** [One specific, targeted question — must require applying or recalling something concrete from this session. Not "do you understand?"]""",
+
+    "reflection": """\
+### What you've built
+List the specific concepts the learner demonstrated understanding of. Be precise.
+
+### Where to sharpen
+List specific weak areas with brief evidence from the conversation. Be direct and honest.
+
+### Next 3 steps
+Three ordered, concrete practice steps. Each = a specific problem type or exercise — not generic advice.""",
+}
+
 LEARN_RESPONSE_USER_PROMPT = """Topic: {topic}
+Output language: {language}
 Teaching action: {next_action}
 Learner stage: {learner_stage}
 Teaching depth: {teaching_depth}
@@ -113,22 +189,8 @@ Learner Prior Knowledge:
 Latest Learner Message:
 {last_user_message}
 
-Respond in this format:
-
-### Acknowledgement
-(Directly respond to what the learner said. Validate what they got right. If they made a mistake, name it specifically and explain why it is wrong. If this is the first turn, greet and set context for what you will teach.)
-
-### Core Concept
-(Build intuition first — the "why". Then explain the mechanics clearly. Do not rush. Use concrete language. If the prerequisite gap is not "none", teach the prerequisite here before the main concept.)
-
-### Worked Example
-(Step-by-step trace through a small concrete example. Show the exact state of the data structure at each step. Label each step. If example_needed is false and concept is already understood, you may replace this with a brief recap or skip it with a one-line note — but when in doubt, show the example.)
-
-### Learning By Doing
-(One focused active task for the learner to attempt right now. Should directly apply the concept just explained. Keep it small and achievable.)
-
-### Checkpoint
-(One specific, targeted question that forces the learner to recall or apply the exact concept just taught. Make it concrete — ask about a specific step, state, or decision — not a generic comprehension check.)
+--- RESPONSE FORMAT FOR THIS TURN ({next_action}) ---
+{response_format}
 """
 
 LEARN_REFLECTION_SYSTEM_PROMPT = """You are a DSA learning reflection coach.
@@ -192,6 +254,7 @@ class LearnTurnAnalysisSchema(BaseModel):
 
 class DSALearnState(TypedDict, total=False):
     topic: str
+    language: str
     problem_statement: str
     prior_knowledge: str
     history_excerpt: str
@@ -207,13 +270,18 @@ class DSALearnState(TypedDict, total=False):
 def build_dsa_learn_prompt_inputs(
     *,
     topic: str,
+    language: str = "english",
     problem_statement: str,
     prior_knowledge: str | None,
     history_excerpt: str | None,
     last_user_message: str,
 ) -> dict[str, str]:
+    normalized_lang = (language or "english").strip().lower()
+    if normalized_lang not in {"english", "bengali", "hindi"}:
+        normalized_lang = "english"
     return {
         "topic": topic.strip().lower(),
+        "language": normalized_lang,
         "problem_statement": problem_statement.strip(),
         "prior_knowledge": (prior_knowledge or "").strip() or "Not provided",
         "history_excerpt": ((history_excerpt or "").strip() or "No prior turns yet.")[-8000:],
@@ -296,6 +364,10 @@ async def _learn_response_node(state: DSALearnState) -> dict[str, Any]:
     ])
     chain = prompt | llm
     usage_callback = UsageMetadataCallbackHandler()
+    response_format = RESPONSE_FORMAT_BY_ACTION.get(
+        analysis.next_action,
+        RESPONSE_FORMAT_BY_ACTION["explain_concept"],
+    )
     raw_result = await chain.ainvoke(
         {
             **state,
@@ -309,6 +381,8 @@ async def _learn_response_node(state: DSALearnState) -> dict[str, Any]:
             "concept_focus": analysis.concept_focus,
             "prerequisite_focus": analysis.prerequisite_focus,
             "observed_mistakes": display["observed_mistakes"],
+            "response_format": response_format,
+            "language": state.get("language") or "english",
         },
         config={"callbacks": [usage_callback]},
     )
@@ -418,6 +492,7 @@ def init_graph(checkpointer: Any) -> None:
 async def generate_dsa_learn_turn(
     *,
     topic: str,
+    language: str = "english",
     problem_statement: str,
     prior_knowledge: str | None,
     history_excerpt: str | None,
@@ -426,6 +501,7 @@ async def generate_dsa_learn_turn(
 ) -> tuple[str, dict[str, Any], list[dict[str, str]], LLMUsagePayload]:
     prompt_inputs = build_dsa_learn_prompt_inputs(
         topic=topic,
+        language=language,
         problem_statement=problem_statement,
         prior_knowledge=prior_knowledge,
         history_excerpt=history_excerpt,
