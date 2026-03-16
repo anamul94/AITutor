@@ -34,6 +34,7 @@ class Course(Base):
     )
     generation_warnings = Column(JSON, nullable=False, default=list, server_default=text("'[]'"))
     language = Column(String(20), nullable=False, default="english", server_default=text("'english'"))
+    generation_metadata = Column(JSON, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -76,6 +77,7 @@ class Lesson(Base):
     order_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=True)  # Markdown content generated dynamically
     quiz_data = Column(JSON, nullable=True) # JSON generated dynamically
+    generation_metadata = Column(JSON, nullable=True)
     content_generated_at = Column(DateTime(timezone=True), nullable=True)
 
     module = relationship("Module", back_populates="lessons")

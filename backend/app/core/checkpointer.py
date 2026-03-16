@@ -33,10 +33,19 @@ async def init_checkpointer() -> Any | None:
     global _pool, _checkpointer
     try:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        from psycopg.rows import dict_row
         from psycopg_pool import AsyncConnectionPool
 
         conn_str = _make_psycopg_conn_string()
-        _pool = AsyncConnectionPool(conn_str, open=False, max_size=10)
+        _pool = AsyncConnectionPool(
+            conn_str,
+            open=False,
+            max_size=10,
+            kwargs={
+                "autocommit": True,
+                "row_factory": dict_row,
+            },
+        )
         await _pool.open(wait=True)
 
         _checkpointer = AsyncPostgresSaver(_pool)

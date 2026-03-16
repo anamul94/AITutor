@@ -18,6 +18,10 @@ from app.schemas.course import (
     UserProgressResponse,
 )
 from app.agents import generate_course_syllabus, generate_lesson_content, generate_lesson_quiz
+from app.agents.course_agent import (
+    get_effective_course_generation_metadata,
+    get_effective_lesson_generation_metadata,
+)
 
 router = APIRouter()
 
@@ -164,6 +168,7 @@ async def generate_and_save_course(
         content_style=request.content_style,
         generation_warnings=warnings,
         language=request.language,
+        generation_metadata=generated_course.generation_metadata.model_dump(),
         created_by=current_user.id
     )
     db.add(new_course)
@@ -184,7 +189,8 @@ async def generate_and_save_course(
                 module_id=new_module.id,
                 title=g_lesson.title,
                 description=g_lesson.description,
-                order_index=g_lesson.order_index
+                order_index=g_lesson.order_index,
+                generation_metadata=g_lesson.generation_metadata.model_dump(),
             )
             db.add(new_lesson)
 
@@ -305,6 +311,16 @@ async def get_or_generate_lesson_content(
     current_user_progress = progress_result.scalars().all()
 
     def format_response(l: Lesson, progress_rows: list[UserProgress]):
+        effective_lesson_generation_metadata = get_effective_lesson_generation_metadata(
+            lesson_title=l.title,
+            lesson_description=l.description,
+            course_generation_metadata=get_effective_course_generation_metadata(
+                topic=l.module.course.topic,
+                learning_goal=l.module.course.learning_goal,
+                generation_metadata=l.module.course.generation_metadata,
+            ),
+            generation_metadata=l.generation_metadata,
+        )
         return {
             "id": l.id,
             "module_id": l.module_id,
@@ -313,6 +329,7 @@ async def get_or_generate_lesson_content(
             "description": l.description,
             "content": l.content,
             "quiz_data": l.quiz_data,
+            "generation_metadata": effective_lesson_generation_metadata,
             "progress": progress_rows
         }
 
@@ -344,6 +361,9 @@ async def get_or_generate_lesson_content(
             preferred_level=lesson.module.course.preferred_level,
             language=lesson.module.course.language or "english",
             content_style=lesson.module.course.content_style,
+            topic=lesson.module.course.topic,
+            course_generation_metadata=lesson.module.course.generation_metadata,
+            lesson_generation_metadata=lesson.generation_metadata,
         )
         
         # Save generated content to database
@@ -420,6 +440,9 @@ async def get_or_generate_lesson_quiz(
             learning_goal=lesson.module.course.learning_goal,
             preferred_level=lesson.module.course.preferred_level,
             language=lesson.module.course.language or "english",
+            topic=lesson.module.course.topic,
+            course_generation_metadata=lesson.module.course.generation_metadata,
+            lesson_generation_metadata=lesson.generation_metadata,
         )
 
         lesson.quiz_data = [q.model_dump() for q in generated_quiz.quiz]

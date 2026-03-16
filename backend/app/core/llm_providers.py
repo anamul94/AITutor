@@ -27,10 +27,15 @@ def _create_bedrock_llm() -> tuple[Any, dict[str, str]]:
         if len(parts) > 1:
             provider = parts[-1].split(".")[0]
 
+    read_timeout = int(os.getenv("LLM_READ_TIMEOUT", "240"))
+    connect_timeout = int(os.getenv("LLM_CONNECT_TIMEOUT", "20"))
+    max_attempts = int(os.getenv("LLM_MAX_RETRIES", "3"))
+
     my_config = Config(
-        read_timeout=120,
+        read_timeout=read_timeout,
+        connect_timeout=connect_timeout,
         retries={
-            "max_attempts": 3,
+            "max_attempts": max_attempts,
             "mode": "standard",
         },
     )
@@ -41,6 +46,9 @@ def _create_bedrock_llm() -> tuple[Any, dict[str, str]]:
         "temperature": float(os.getenv("LLM_TEMPERATURE", "0.1")),
         "config": my_config,
     }
+    max_tokens = os.getenv("LLM_MAX_TOKENS")
+    if max_tokens:
+        kwargs["max_tokens"] = int(max_tokens)
     if provider:
         kwargs["provider"] = provider
 
@@ -59,7 +67,7 @@ def _create_openai_compatible_llm() -> tuple[Any, dict[str, str]]:
             "Install it and retry."
         ) from exc
 
-    model_name = os.getenv("OPENAI_COMPAT_MODEL_ID", "z-ai/glm-5")
+    model_name = os.getenv("OPENAI_COMPAT_MODEL_ID", "glm-4.7-flash:latest")
     api_key = (
         os.getenv("OPENAI_COMPAT_API_KEY")
         or os.getenv("OPEN_ROUTER_API_KEY")
@@ -79,6 +87,9 @@ def _create_openai_compatible_llm() -> tuple[Any, dict[str, str]]:
         base_url=base_url,
         temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
     )
+    max_tokens = os.getenv("LLM_MAX_TOKENS")
+    if max_tokens:
+        llm = llm.bind(max_tokens=int(max_tokens))
 
     return llm, {
         "provider": "openai-compatible",
