@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Literal, Optional
 
@@ -67,6 +68,7 @@ class LessonResponse(BaseModel):
     title: str
     description: Optional[str] = None
     order_index: int
+    content_generated_at: Optional[datetime] = None
 
 class ModuleResponse(BaseModel):
     id: int

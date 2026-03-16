@@ -3,13 +3,15 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy import and_, case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_admin, get_db
 from app.core.config import settings
 from app.core.runtime_settings import get_premium_trial_days, set_premium_trial_days
 from app.core.security import get_password_hash
-from app.models.course import Course, LLMUsageEvent, Lesson
+from app.models.course import Course, LLMUsageEvent, Lesson, Module, UserProgress
 from app.models.user import User
+from app.schemas.course import CourseResponse, LessonContentResponse
 from app.schemas.user import (
     AdminInsightsResponse,
     AdminRegisterRequest,
@@ -31,6 +33,42 @@ def get_day_window_utc() -> tuple[datetime, datetime]:
     start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = start_of_day + timedelta(days=1)
     return start_of_day, end_of_day
+
+
+async def attach_course_progress_percentages(
+    db: AsyncSession,
+    user_id: int,
+    courses: list[Course],
+) -> None:
+    if not courses:
+        return
+
+    course_ids = [course.id for course in courses]
+    total_lessons_by_course = {
+        course.id: sum(len(module.lessons) for module in course.modules)
+        for course in courses
+    }
+
+    completed_result = await db.execute(
+        select(Module.course_id, func.count(func.distinct(UserProgress.lesson_id)))
+        .select_from(UserProgress)
+        .join(Lesson, UserProgress.lesson_id == Lesson.id)
+        .join(Module, Lesson.module_id == Module.id)
+        .where(Module.course_id.in_(course_ids))
+        .where(UserProgress.user_id == user_id)
+        .where(UserProgress.is_completed.is_(True))
+        .group_by(Module.course_id)
+    )
+    completed_by_course = {
+        course_id: int(completed_count)
+        for course_id, completed_count in completed_result.all()
+    }
+
+    for course in courses:
+        total_lessons = total_lessons_by_course.get(course.id, 0)
+        completed_lessons = completed_by_course.get(course.id, 0)
+        progress_percentage = (completed_lessons * 100.0 / total_lessons) if total_lessons else 0.0
+        setattr(course, "progress_percentage", round(progress_percentage, 1))
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -125,6 +163,74 @@ async def list_users(
 ):
     result = await db.execute(select(User).order_by(User.created_at.desc(), User.id.desc()))
     return result.scalars().all()
+
+
+@router.get("/users/{user_id}/courses", response_model=list[CourseResponse])
+async def list_user_courses(
+    user_id: int = Path(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+    _current_admin: User = Depends(get_current_admin),
+):
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    target_user = user_result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    result = await db.execute(
+        select(Course)
+        .options(selectinload(Course.modules).selectinload(Module.lessons))
+        .where(Course.created_by == user_id)
+        .order_by(Course.created_at.desc(), Course.id.desc())
+    )
+    courses = result.scalars().all()
+    await attach_course_progress_percentages(db, user_id, courses)
+    return courses
+
+
+@router.get("/courses/{course_id}", response_model=CourseResponse)
+async def get_admin_course(
+    course_id: int = Path(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+    _current_admin: User = Depends(get_current_admin),
+):
+    result = await db.execute(
+        select(Course)
+        .options(selectinload(Course.modules).selectinload(Module.lessons))
+        .where(Course.id == course_id)
+    )
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    await attach_course_progress_percentages(db, course.created_by, [course])
+    return course
+
+
+@router.get("/lessons/{lesson_id}", response_model=LessonContentResponse)
+async def get_admin_lesson(
+    lesson_id: int = Path(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+    _current_admin: User = Depends(get_current_admin),
+):
+    result = await db.execute(
+        select(Lesson)
+        .options(selectinload(Lesson.module).selectinload(Module.course))
+        .where(Lesson.id == lesson_id)
+    )
+    lesson = result.scalar_one_or_none()
+    if not lesson:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
+
+    return {
+        "id": lesson.id,
+        "module_id": lesson.module_id,
+        "course_id": lesson.module.course_id,
+        "title": lesson.title,
+        "description": lesson.description,
+        "content": lesson.content,
+        "quiz_data": lesson.quiz_data,
+        "progress": [],
+    }
 
 
 @router.patch("/users/{user_id}/plan", response_model=UserResponse)

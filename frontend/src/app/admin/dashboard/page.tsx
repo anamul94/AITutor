@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Users, UserPlus, Activity, BookOpen, GraduationCap, Coins, RefreshCw, LogOut, Loader2, BarChart3 } from 'lucide-react';
+import { ShieldCheck, Users, UserPlus, Activity, BookOpen, GraduationCap, Coins, RefreshCw, LogOut, Loader2, BarChart3, Eye } from 'lucide-react';
 import axios from 'axios';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -81,6 +81,10 @@ export default function AdminDashboardPage() {
   const [isSavingTrialDays, setIsSavingTrialDays] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const browseUsers = useMemo(
+    () => users.filter((accountUser) => !accountUser.is_admin),
+    [users],
+  );
 
   const parseApiError = useCallback((err: unknown, fallbackMessage: string): string => (
     axios.isAxiosError(err)
@@ -238,7 +242,6 @@ export default function AdminDashboardPage() {
   ];
   const modelUsageRows = insights?.token_usage_by_model ?? [];
   const maxModelTotalTokens = Math.max(...modelUsageRows.map((row) => row.total_tokens), 1);
-
   return (
     <div className="min-h-screen bg-gray-950 text-white p-6 md:p-10">
       <div className="max-w-6xl mx-auto">
@@ -379,6 +382,53 @@ export default function AdminDashboardPage() {
               <p className="text-sm text-gray-400">No users registered today.</p>
             )}
           </div>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-gray-800 bg-gray-900 p-6">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <h2 className="text-xl font-semibold">Browse User Courses</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Read-only access. Admin can view a user&apos;s courses and lessons, but cannot generate or modify content.
+              </p>
+            </div>
+            {isLoadingUsers && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+          </div>
+
+          {browseUsers.length === 0 && !isLoadingUsers ? (
+            <p className="text-sm text-gray-400">No regular users found.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {browseUsers.map((accountUser) => (
+                <button
+                  key={accountUser.id}
+                  onClick={() => router.push(`/admin/users/${accountUser.id}`)}
+                  className="text-left rounded-2xl border border-gray-800 bg-gray-950/60 p-5 hover:border-blue-500/40 hover:bg-gray-950 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-white font-semibold break-all">{accountUser.email}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Joined {new Date(accountUser.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-200">
+                      <Eye className="w-3.5 h-3.5" />
+                      View
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <span className={`px-2 py-1 rounded-md text-xs font-semibold ${accountUser.plan_type === 'premium' ? 'bg-blue-500/20 text-blue-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                      {accountUser.plan_type === 'premium' ? 'Premium' : 'Free'}
+                    </span>
+                    <span className={`px-2 py-1 rounded-md text-xs font-semibold ${accountUser.is_active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>
+                      {accountUser.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="mt-8 rounded-2xl border border-gray-800 bg-gray-900 p-6">
