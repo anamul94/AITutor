@@ -6,6 +6,8 @@ from typing import Any
 from botocore.config import Config
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
+from langchain.chat_models import init_chat_model
+from langchain_ollama import ChatOllama
 
 load_dotenv()
 
@@ -27,7 +29,7 @@ def _create_bedrock_llm() -> tuple[Any, dict[str, str]]:
         if len(parts) > 1:
             provider = parts[-1].split(".")[0]
 
-    read_timeout = int(os.getenv("LLM_READ_TIMEOUT", "240"))
+    read_timeout = int(os.getenv("LLM_READ_TIMEOUT", "300"))
     connect_timeout = int(os.getenv("LLM_CONNECT_TIMEOUT", "20"))
     max_attempts = int(os.getenv("LLM_MAX_RETRIES", "3"))
 
@@ -68,6 +70,7 @@ def _create_openai_compatible_llm() -> tuple[Any, dict[str, str]]:
         ) from exc
 
     model_name = os.getenv("OPENAI_COMPAT_MODEL_ID", "glm-4.7-flash:latest")
+    model_provider = os.getenv("PROVIDER")
     api_key = (
         os.getenv("OPENAI_COMPAT_API_KEY")
         or os.getenv("OPEN_ROUTER_API_KEY")
@@ -81,11 +84,17 @@ def _create_openai_compatible_llm() -> tuple[Any, dict[str, str]]:
 
     base_url = os.getenv("OPENAI_COMPAT_BASE_URL", "https://openrouter.ai/api/v1")
 
-    llm = ChatOpenAI(
+    # llm = ChatOpenAI(
+    #     model=model_name,
+    #     api_key=api_key,
+    #     base_url=base_url,
+    #     temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
+    # )
+    llm = init_chat_model(
         model=model_name,
-        api_key=api_key,
+        model_provider=model_provider,
+        temperature=0.0,
         base_url=base_url,
-        temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
     )
     max_tokens = os.getenv("LLM_MAX_TOKENS")
     if max_tokens:

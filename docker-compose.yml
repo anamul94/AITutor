@@ -38,7 +38,7 @@ services:
       context: ./frontend
       args:
         # NEXT_PUBLIC_* vars are baked in at build time — read from .env.local
-        NEXT_PUBLIC_API_URL: http://15.207.68.194:8020
+        NEXT_PUBLIC_API_URL: http://localhost:8020
     container_name: aitutor-frontend
     restart: always
     env_file:
